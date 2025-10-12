@@ -81,15 +81,17 @@ export class Game extends Scene {
     }
 
     createBall(x, y) {
-        const BALL_RADIUS = 28; // antes 18, ahora más grande
+        const BALL_RADIUS = 28;
         const circle = this.add.circle(x, y, BALL_RADIUS, 0xffffff);
         const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(x, y);
         bodyDesc.setUserData(circle);
         const body = this.world.createRigidBody(bodyDesc);
         const collider = RAPIER.ColliderDesc.ball(BALL_RADIUS);
-        collider.setRestitution(0.96); // rebote
-        //collider.setFriction(0.2);    // rozamiento (nuevo)
-        //collider.setDensity(0.55);     // opcional, afecta masa/inercia
+        collider.setRestitution(0.96);
+
+        // Activa CCD para la pelota
+        //collider.setCcdEnabled(true);
+
         this.world.createCollider(collider, body);
         return body;
     }
@@ -111,6 +113,7 @@ export class Game extends Scene {
             const collider = RAPIER.ColliderDesc.cuboid(
                 PLAYER_WIDTH / 2, PLAYER_HEIGHT / 2
             );
+            //collider.setCcdEnabled(true); // <--- agrega esto
             this.world.createCollider(collider, body);
             group.push(body);
         }
@@ -123,12 +126,32 @@ export class Game extends Scene {
         const body = this.world.createRigidBody(desc);
         const collider = RAPIER.ColliderDesc.cuboid(goal.w / 2, goal.h / 2);
         this.world.createCollider(collider, body);
+
+        // --- VISUAL: dibujar el arco ---
+        const visualWidth = 60;   // más ancho para que se note
+        const visualHeight = 200;
+        const color = x < 960 ? 0x00aaff : 0xff5555; // azul izquierda, rojo derecha
+        const goalRect = this.add.rectangle(x, y, visualWidth, visualHeight)
+            .setStrokeStyle(6, color, 1)
+            .setFillStyle(color, 0.1); // leve transparencia
+
+        body.userData = goalRect;
+        
+        //const debugZone = this.add.rectangle(x, y, 120, 220, 0xff0000, 0.2);
+        //debugZone.setStrokeStyle(2, 0xffffff);
+
         return body;
+            
+
     }
+
 
     update() {
         if (!this.world) return;
         this.world.step();
+
+        // Detección de gol SOLO dentro del área del arco
+        this.checkGoal();
 
         // Actualizar posición de objetos
         this.world.bodies.forEach((body) => {
@@ -173,6 +196,29 @@ export class Game extends Scene {
         }
     }
 
+    checkGoal() {
+        const ballPos = this.ball.translation();
+        const goalHeight = 200; // Debe coincidir con el alto visual del arco
+
+        // --- Gol IZQUIERDO (azul anota) ---
+        if (
+            ballPos.x < 100 &&
+            ballPos.y > this.goalLeft.translation().y - goalHeight / 2 &&
+            ballPos.y < this.goalLeft.translation().y + goalHeight / 2
+        ) {
+            this.handleGoal('a');
+        }
+
+        // --- Gol DERECHO (rojo anota) ---
+        else if (
+            ballPos.x > 1820 &&
+            ballPos.y > this.goalRight.translation().y - goalHeight / 2 &&
+            ballPos.y < this.goalRight.translation().y + goalHeight / 2
+        ) {
+            this.handleGoal('r');
+        }
+    }
+
     // Mueve la "barra" tomando como referencia al jugador central
     moveRod(team, dy) {
         if (!team || team.length === 0) return;
@@ -210,8 +256,8 @@ export class Game extends Scene {
 
     // Patada: aplica un impulso a la pelota si está cerca del centro de la barra
     kickRod(team, dir) {
-    const KICK_DISTANCE = 35;   // cuánto avanza la patada
-    const KICK_DURATION = 180;   // duración total en ms
+    const KICK_DISTANCE = 55;   // cuánto avanza la patada
+    const KICK_DURATION = 210;   // duración total en ms
 
     for (const player of team) {
         if (player.isKicking) continue;
@@ -255,6 +301,58 @@ export class Game extends Scene {
         });
     }
 }
+    handleGoal(team) {
+        if (this.goalScored) return;
+        this.goalScored = true;
+
+        if (team === 'r') this.scoreA++;
+        else this.scoreB++;
+
+        this.scoreText.setText(`${this.scoreA} - ${this.scoreB}`);
+
+        // 💥 Flash visual
+        const flash = this.add.rectangle(960, 540, 1920, 1080, 0xffffff)
+            .setAlpha(0);
+        this.tweens.add({
+            targets: flash,
+            alpha: { from: 0, to: 0.8 },
+            duration: 150,
+            yoyo: true,
+            onComplete: () => flash.destroy()
+        });
+
+        // 🟡 Texto "GOL!"
+        const text = this.add.text(960, 540, '¡GOL!', {
+            fontSize: '120px',
+            color: '#fff',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setScale(0);
+
+        this.tweens.add({
+            targets: text,
+            scale: { from: 0, to: 1.2 },
+            alpha: { from: 0, to: 1 },
+            duration: 300,
+            ease: 'Back.Out',
+            yoyo: true,
+            hold: 300,
+            onComplete: () => text.destroy()
+        });
+
+        // ⚙️ Reinicia la pelota después de delay
+        this.time.delayedCall(1500, () => {
+            this.resetBall();
+            this.goalScored = false;
+        });
+    }
+
+
+    resetBall() {
+        const body = this.ball;
+        body.setTranslation({ x: 960, y: 540 }, true);
+        body.setLinvel({ x: 0, y: 0 }, true);
+        body.setAngvel(0, true);
+    }
 
 
 }
