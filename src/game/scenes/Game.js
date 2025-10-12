@@ -96,10 +96,14 @@ export class Game extends Scene {
 
     createRod(x, count, color) {
         const group = [];
+        const PLAYER_WIDTH = 40;
+        const PLAYER_HEIGHT = 70;
+        const fieldHeight = 1080;
+        const totalHeight = (count - 1) * 150; // separación entre jugadores
+        const startY = (fieldHeight / 2) - (totalHeight / 2);
+
         for (let i = 0; i < count; i++) {
-            const PLAYER_WIDTH = 40;   // antes 25, ahora más ancho
-            const PLAYER_HEIGHT = 70;  // antes 40, ahora más alto
-            const y = 200 + i * 150;
+            const y = startY + i * 150;
             const rect = this.add.rectangle(x, y, PLAYER_WIDTH, PLAYER_HEIGHT, color);
             const bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(x, y);
             bodyDesc.setUserData(rect);
@@ -136,7 +140,7 @@ export class Game extends Scene {
             }
         });
 
-        // Movimiento básico de varas
+        // Movimiento básico de todas las barras del equipo Rojo (A) y Azul (B)
         let dyA = 0;
         let dyB = 0;
 
@@ -146,21 +150,26 @@ export class Game extends Scene {
         if (this.cursors.up.isDown) dyB = -23;
         else if (this.cursors.down.isDown) dyB = 23;
 
-        this.moveRod(this.teamA, dyA);
-        this.moveRod(this.teamB, dyB);
+        // Mueve todas las barras de cada equipo
+        for (const rod of this.teams.r) {
+            this.moveRod(rod, dyA);
+        }
+        for (const rod of this.teams.a) {
+            this.moveRod(rod, dyB);
+        }
 
-        // Patear (una sola vez al presionar)
+        // Patear (todas las barras de cada equipo)
         if (Phaser.Input.Keyboard.JustDown(this.WASD.A)) {
-            this.kickRod(this.teamA, -1);
+            for (const rod of this.teams.r) this.kickRod(rod, -1);
         }
         if (Phaser.Input.Keyboard.JustDown(this.WASD.D)) {
-            this.kickRod(this.teamA, 1);
+            for (const rod of this.teams.r) this.kickRod(rod, 1);
         }
         if (Phaser.Input.Keyboard.JustDown(this.cursors.left)) {
-            this.kickRod(this.teamB, -1);
+            for (const rod of this.teams.a) this.kickRod(rod, -1);
         }
         if (Phaser.Input.Keyboard.JustDown(this.cursors.right)) {
-            this.kickRod(this.teamB, 1);
+            for (const rod of this.teams.a) this.kickRod(rod, 1);
         }
     }
 
@@ -168,26 +177,32 @@ export class Game extends Scene {
     moveRod(team, dy) {
         if (!team || team.length === 0) return;
 
-        // índice del jugador central
-        const centerIndex = Math.floor(team.length / 2);
-        const centerBody = team[centerIndex];
-        const posCenter = centerBody.translation();
+        const PLAYER_HEIGHT = 70;
+        const margin = 60;
+        const fieldHeight = 1080;
 
-        // calculamos el alto total del equipo (distancia entre el primero y el último)
-        const firstY = team[0].translation().y;
-        const lastY = team[team.length - 1].translation().y;
-        const halfHeight = (lastY - firstY) / 2;
+        // Obtén las posiciones Y actuales de todos los jugadores de la barra
+        const ys = team.map(body => body.translation().y);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
 
-        // límites considerando la altura total de la barra
-        const topLimit = 30 + halfHeight;
-        const bottomLimit = 745 - halfHeight;
+        // Calcula el centro real de la barra
+        const centerY = (minY + maxY) / 2;
 
-        // nueva posición del centro
-        const newCenterY = Phaser.Math.Clamp(posCenter.y + dy, topLimit, bottomLimit);
-        const deltaY = newCenterY - posCenter.y;
+        // Calcula el alto real de la barra (de centro a centro) + medio jugador arriba y abajo
+        const halfBarHeight = ((maxY - minY) / 2) + (PLAYER_HEIGHT / 2);
 
-        // mover todos los jugadores el mismo delta
-        for (const body of team) {
+        // Límites corregidos
+        const topLimit = margin + halfBarHeight;
+        const bottomLimit = fieldHeight - margin - halfBarHeight;
+
+        // Nuevo centro Y limitado
+        const newCenterY = Phaser.Math.Clamp(centerY + dy, topLimit, bottomLimit);
+        const deltaY = newCenterY - centerY;
+
+        // Mueve todos los jugadores de la barra
+        for (let i = 0; i < team.length; i++) {
+            const body = team[i];
             const pos = body.translation();
             body.setNextKinematicTranslation({ x: pos.x, y: pos.y + deltaY });
         }
