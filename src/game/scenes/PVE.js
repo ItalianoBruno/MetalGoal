@@ -1,16 +1,15 @@
 import RAPIER from '@dimforge/rapier2d-compat';
 import { Scene } from 'phaser';
 
-export class Game extends Scene {
+export class PVE extends Scene {
     constructor() {
-        super('Game');
+        super('PVE');
     }
 
     async create() {
         // Inicializar Rapier
         await RAPIER.init();
         this.world = new RAPIER.World(new RAPIER.Vector2(0, 0));
-
         this.cameras.main.setBackgroundColor(0x0f4c1f);
 
         // Bordes del campo (ajusta a 1920x1080)
@@ -52,8 +51,7 @@ export class Game extends Scene {
         this.goalLeft = this.createGoal(60, 540);
         this.goalRight = this.createGoal(1860, 540);
 
-        // Configurar inputs
-        this.cursors = this.input.keyboard.createCursorKeys();
+        // Solo controles para el jugador rojo
         this.WASD = this.input.keyboard.addKeys('W,A,S,D');
 
         // Marcadores (centrado arriba)
@@ -62,7 +60,6 @@ export class Game extends Scene {
         this.scoreText = this.add.text(960, 40, '0 - 0', { fontSize: '32px', color: '#fff' }).setOrigin(0.5);
 
         this.test();
-
     }
 
     createBoundaries() {
@@ -205,65 +202,60 @@ export class Game extends Scene {
             }
         });
 
-        // Movimiento básico de todas las barras del equipo Rojo (A) y Azul (B)
+        // --- CONTROLES DEL JUGADOR (ROJO) ---
         let dyA = 0;
-        let dyB = 0;
-
         if (this.WASD.W.isDown) dyA = -23;
         else if (this.WASD.S.isDown) dyA = 23;
 
-        if (this.cursors.up.isDown) dyB = -23;
-        else if (this.cursors.down.isDown) dyB = 23;
-
-        // Mueve todas las barras de cada equipo
         for (const rod of this.teams.r) {
             this.moveRod(rod, dyA);
         }
-        for (const rod of this.teams.a) {
-            this.moveRod(rod, dyB);
-        }
 
-        // Patear (todas las barras de cada equipo)
         if (Phaser.Input.Keyboard.JustDown(this.WASD.A)) {
             for (const rod of this.teams.r) this.kickRod(rod, -1);
         }
         if (Phaser.Input.Keyboard.JustDown(this.WASD.D)) {
             for (const rod of this.teams.r) this.kickRod(rod, 1);
         }
-        if (Phaser.Input.Keyboard.JustDown(this.cursors.left)) {
-            for (const rod of this.teams.a) this.kickRod(rod, -1);
-        }
-        if (Phaser.Input.Keyboard.JustDown(this.cursors.right)) {
-            for (const rod of this.teams.a) this.kickRod(rod, 1);
+
+        // --- IA PARA EL EQUIPO AZUL ---
+        this.aiMoveAndKick();
+    }
+
+    aiMoveAndKick() {
+        // IA simple: mueve la barra azul más cercana a la pelota para alinearse y patea si está cerca
+        const ballPos = this.ball.translation();
+        let minDist = Infinity;
+        let closestRod = null;
+
+        for (const rod of this.teams.a) {
+            // Calcula la distancia horizontal de la barra al balón (usa el jugador central)
+            const centerIndex = Math.floor(rod.length / 2);
+            const player = rod[centerIndex];
+            const pos = player.translation();
+            const dist = Math.abs(pos.x - ballPos.x);
+            if (dist < minDist) {
+                minDist = dist;
+                closestRod = rod;
+            }
         }
 
-                                                // --- DEBUG VISUAL DE COLLIDERS ---
-        if (!this.debugGraphics) {
-            this.debugGraphics = this.add.graphics();
-            this.debugGraphics.setDepth(1000);
-        }
-        this.debugGraphics.clear();
-        this.debugGraphics.lineStyle(1, 0xffff00, 0.7);
+        if (closestRod) {
+            // Mueve la barra para seguir la pelota en Y
+            const centerIndex = Math.floor(closestRod.length / 2);
+            const player = closestRod[centerIndex];
+            const pos = player.translation();
+            const dy = ballPos.y - pos.y;
+            const speed = Phaser.Math.Clamp(dy, -18, 18); // velocidad IA
+            this.moveRod(closestRod, speed);
 
-        this.world.forEachRigidBody((body) => {
-            // Obtén todos los colliders asociados a este cuerpo
-            this.world.forEachCollider((collider) => {
-                if (collider.parent() && collider.parent().handle === body.handle) {
-                    const shape = collider.shape;
-                    const pos = body.translation();
-                    if (shape.type === RAPIER.ShapeType.Ball) {
-                        this.debugGraphics.strokeCircle(pos.x, pos.y, shape.radius);
-                    } else if (shape.type === RAPIER.ShapeType.Cuboid) {
-                        const hw = shape.halfExtents.x;
-                        const hh = shape.halfExtents.y;
-                        this.debugGraphics.strokeRect(
-                            pos.x - hw, pos.y - hh,
-                            hw * 2, hh * 2
-                        );
-                    }
-                }
-            });
-        });                                             // --- FIN DEBUG ---
+            // Patea automáticamente si la pelota está cerca
+            const dx = Math.abs(pos.x - ballPos.x);
+            const dyBall = Math.abs(pos.y - ballPos.y);
+            if (dx < 60 && dyBall < 80) {
+                this.kickRod(closestRod, 1); // patea hacia la izquierda
+            }
+        }
     }
 
     checkGoal() {

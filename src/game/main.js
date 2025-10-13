@@ -1,5 +1,6 @@
 import { Boot } from './scenes/Boot';
 import { Game as MainGame } from './scenes/Game';
+import { PVE } from './scenes/PVE'; // <--- NUEVO
 import { GameOver } from './scenes/GameOver';
 import { MainMenu } from './scenes/MainMenu';
 import { Preloader } from './scenes/Preloader';
@@ -22,14 +23,13 @@ const config = {
         Preloader,
         MainMenu,
         MainGame,
+        PVE,        // <--- NUEVO
         GameOver
     ]
 };
 
 const StartGame = (parent) => {
-
     return new Game({ ...config, parent });
-
 }
 
 export default StartGame;
