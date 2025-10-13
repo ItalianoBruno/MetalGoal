@@ -19,15 +19,16 @@ export class Game extends Scene {
         // Disposición clásica de metegol
         // [cantidad, color, nombre]
         const rods = [
-            { count: 1, color: 0xff0000, key: 'r' }, // 1r
-            { count: 2, color: 0xff0000, key: 'r' }, // 2r
-            { count: 3, color: 0x0000ff, key: 'a' }, // 3a
-            { count: 5, color: 0xff0000, key: 'r' }, // 5r
-            { count: 5, color: 0x0000ff, key: 'a' }, // 5a
-            { count: 3, color: 0xff0000, key: 'r' }, // 3r
-            { count: 2, color: 0x0000ff, key: 'a' }, // 2a
-            { count: 1, color: 0x0000ff, key: 'a' }, // 1a
+            { count: 1, color: 0xff0000, key: 'r', offsetX: 100 }, // arquero rojo dentro arco
+            { count: 2, color: 0xff0000, key: 'r', offsetX: 250 }, // defensores más cerca del arco
+            { count: 3, color: 0x0000ff, key: 'a', offsetX: 1670 }, // defensores azules más cerca del arco
+            { count: 5, color: 0xff0000, key: 'r' },
+            { count: 5, color: 0x0000ff, key: 'a' },
+            { count: 3, color: 0xff0000, key: 'r' },
+            { count: 2, color: 0x0000ff, key: 'a', offsetX: 1670 }, // laterales azules cerca del arco
+            { count: 1, color: 0x0000ff, key: 'a', offsetX: 1820 }, // arquero azul dentro arco
         ];
+
 
         // Calcula posiciones X equidistantes
         const fieldWidth = 1920;
@@ -59,26 +60,62 @@ export class Game extends Scene {
         this.scoreA = 0;
         this.scoreB = 0;
         this.scoreText = this.add.text(960, 40, '0 - 0', { fontSize: '32px', color: '#fff' }).setOrigin(0.5);
+
+        this.test();
+
     }
 
     createBoundaries() {
-        const thickness = 20;
-        const width = 1920;
-        const height = 1080;
-        const walls = [
-            { x: width / 2, y: thickness / 2, w: width, h: thickness }, // arriba
-            { x: width / 2, y: height - thickness / 2, w: width, h: thickness }, // abajo
-            { x: thickness / 2, y: height / 2, w: thickness, h: height }, // izquierda
-            { x: width - thickness / 2, y: height / 2, w: thickness, h: height } // derecha
-        ];
+    const thickness = 20;
+    const width = 1920;
+    const height = 1080;
+    const PLAYER_HEIGHT = 70;
+    const goalHeight = PLAYER_HEIGHT * 5; // 350
+    const goalWidth = 120; // más profundo el arco
+    const goalY = 540;
 
-        for (let wall of walls) {
-            const desc = RAPIER.RigidBodyDesc.fixed().setTranslation(wall.x, wall.y);
-            const body = this.world.createRigidBody(desc);
-            const collider = RAPIER.ColliderDesc.cuboid(wall.w / 2, wall.h / 2);
-            this.world.createCollider(collider, body);
-        }
+    // --- BORDES PRINCIPALES ---
+    const walls = [
+        // Arriba y abajo
+        { x: width / 2, y: thickness / 2, w: width, h: thickness }, // arriba
+        { x: width / 2, y: height - thickness / 2, w: width, h: thickness }, // abajo
+
+        // Izquierda fuera del arco (desde top hasta antes del arco)
+        { x: thickness / 2, y: (goalY - goalHeight / 2) / 2, w: thickness, h: goalY - goalHeight / 2 },
+        // Izquierda fuera del arco (desde después del arco hasta abajo)
+        { x: thickness / 2, y: (height + goalY + goalHeight / 2) / 2, w: thickness, h: height - (goalY + goalHeight / 2) },
+
+        // Derecha fuera del arco
+        { x: width - thickness / 2, y: (goalY - goalHeight / 2) / 2, w: thickness, h: goalY - goalHeight / 2 },
+        { x: width - thickness / 2, y: (height + goalY + goalHeight / 2) / 2, w: thickness, h: height - (goalY + goalHeight / 2) },
+    ];
+
+    // --- PAREDES INTERNAS DE LOS ARCOS ---
+    const goalWalls = [
+        // Izquierdo (arriba, abajo, fondo)
+        { x: goalWidth, y: goalY - goalHeight / 2, w: goalWidth, h: thickness }, // techo arco izq
+        { x: goalWidth, y: goalY + goalHeight / 2, w: goalWidth, h: thickness }, // piso arco izq
+        { x: goalWidth / 2, y: goalY, w: thickness, h: goalHeight + thickness * 2 }, // fondo arco izq
+
+        // Derecho (arriba, abajo, fondo)
+        { x: width - goalWidth, y: goalY - goalHeight / 2, w: goalWidth, h: thickness }, // techo arco der
+        { x: width - goalWidth, y: goalY + goalHeight / 2, w: goalWidth, h: thickness }, // piso arco der
+        { x: width - goalWidth / 2, y: goalY, w: thickness, h: goalHeight + thickness * 2 }, // fondo arco der
+    ];
+
+    const allWalls = [...walls, ...goalWalls];
+
+    for (let wall of allWalls) {
+        if (wall.h <= 0) continue;
+        const desc = RAPIER.RigidBodyDesc.fixed().setTranslation(wall.x, wall.y);
+        const body = this.world.createRigidBody(desc);
+        const collider = RAPIER.ColliderDesc.cuboid(wall.w / 2, wall.h / 2);
+        collider.setRestitution(0.5);
+        collider.setFriction(0.3);
+        this.world.createCollider(collider, body);
     }
+}
+
 
     createBall(x, y) {
         const BALL_RADIUS = 28;
@@ -88,9 +125,6 @@ export class Game extends Scene {
         const body = this.world.createRigidBody(bodyDesc);
         const collider = RAPIER.ColliderDesc.ball(BALL_RADIUS);
         collider.setRestitution(0.96);
-
-        // Activa CCD para la pelota
-        //collider.setCcdEnabled(true);
 
         this.world.createCollider(collider, body);
         return body;
@@ -113,7 +147,7 @@ export class Game extends Scene {
             const collider = RAPIER.ColliderDesc.cuboid(
                 PLAYER_WIDTH / 2, PLAYER_HEIGHT / 2
             );
-            //collider.setCcdEnabled(true); // <--- agrega esto
+            
             this.world.createCollider(collider, body);
             group.push(body);
         }
@@ -121,29 +155,31 @@ export class Game extends Scene {
     }
 
     createGoal(x, y) {
-        const goal = { x, y, w: 10, h: 100 };
-        const desc = RAPIER.RigidBodyDesc.fixed().setTranslation(x, y);
-        const body = this.world.createRigidBody(desc);
-        const collider = RAPIER.ColliderDesc.cuboid(goal.w / 2, goal.h / 2);
-        this.world.createCollider(collider, body);
+    const PLAYER_HEIGHT = 70;
+    const goalHeight = PLAYER_HEIGHT * 5; // 350
+    const goalWidth = 120; // debe coincidir con createBoundaries
+    const color = x < 960 ? 0x00aaff : 0xff5555;
 
-        // --- VISUAL: dibujar el arco ---
-        const visualWidth = 60;   // más ancho para que se note
-        const visualHeight = 200;
-        const color = x < 960 ? 0x00aaff : 0xff5555; // azul izquierda, rojo derecha
-        const goalRect = this.add.rectangle(x, y, visualWidth, visualHeight)
-            .setStrokeStyle(6, color, 1)
-            .setFillStyle(color, 0.1); // leve transparencia
+    // --- VISUAL: arco extendido ---
+    const goalRect = this.add.rectangle(x, y, goalWidth * 1.5, goalHeight)
+        .setStrokeStyle(6, color, 1)
+        .setFillStyle(color, 0.1)
+        .setDepth(-1); // atrás del resto
 
-        body.userData = goalRect;
-        
-        //const debugZone = this.add.rectangle(x, y, 120, 220, 0xff0000, 0.2);
-        //debugZone.setStrokeStyle(2, 0xffffff);
+    // --- COLLIDER de detección de gol (sin colisión física) ---
+    const triggerX = x < 960 ? 35 : 1920 - 35;
+    const desc = RAPIER.RigidBodyDesc.fixed().setTranslation(triggerX, y);
+    const body = this.world.createRigidBody(desc);
 
-        return body;
-            
+    const collider = RAPIER.ColliderDesc.cuboid(10, goalHeight / 2);
+    collider.setSensor(true); // 💥 no colisiona, solo detecta
+    collider.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
+    this.world.createCollider(collider, body);
 
-    }
+    body.userData = goalRect;
+    return body;
+}
+
 
 
     update() {
@@ -194,6 +230,34 @@ export class Game extends Scene {
         if (Phaser.Input.Keyboard.JustDown(this.cursors.right)) {
             for (const rod of this.teams.a) this.kickRod(rod, 1);
         }
+
+                                                // --- DEBUG VISUAL DE COLLIDERS ---
+        if (!this.debugGraphics) {
+            this.debugGraphics = this.add.graphics();
+            this.debugGraphics.setDepth(1000);
+        }
+        this.debugGraphics.clear();
+        this.debugGraphics.lineStyle(1, 0xffff00, 0.7);
+
+        this.world.forEachRigidBody((body) => {
+            // Obtén todos los colliders asociados a este cuerpo
+            this.world.forEachCollider((collider) => {
+                if (collider.parent() && collider.parent().handle === body.handle) {
+                    const shape = collider.shape;
+                    const pos = body.translation();
+                    if (shape.type === RAPIER.ShapeType.Ball) {
+                        this.debugGraphics.strokeCircle(pos.x, pos.y, shape.radius);
+                    } else if (shape.type === RAPIER.ShapeType.Cuboid) {
+                        const hw = shape.halfExtents.x;
+                        const hh = shape.halfExtents.y;
+                        this.debugGraphics.strokeRect(
+                            pos.x - hw, pos.y - hh,
+                            hw * 2, hh * 2
+                        );
+                    }
+                }
+            });
+        });                                             // --- FIN DEBUG ---
     }
 
     checkGoal() {
@@ -256,8 +320,8 @@ export class Game extends Scene {
 
     // Patada: aplica un impulso a la pelota si está cerca del centro de la barra
     kickRod(team, dir) {
-    const KICK_DISTANCE = 55;   // cuánto avanza la patada
-    const KICK_DURATION = 210;   // duración total en ms
+    const KICK_DISTANCE = 65;   // cuánto avanza la patada
+    const KICK_DURATION = 270;   // duración total en ms
 
     for (const player of team) {
         if (player.isKicking) continue;
@@ -355,4 +419,23 @@ export class Game extends Scene {
     }
 
 
+    test() {
+        this.input.on('pointerdown', (pointer) => {
+            if (!this.ball) return;
+            const ballPos = this.ball.translation();
+            const target = { x: pointer.worldX, y: pointer.worldY };
+
+            // Calcula el vector dirección normalizado
+            const dx = target.x - ballPos.x;
+            const dy = target.y - ballPos.y;
+            const length = Math.sqrt(dx * dx + dy * dy) || 1;
+            const speed = 703; // Ajusta la velocidad deseada (3333 es el máz, dsp atraviesa elementos rígidos)
+
+            // Aplica la velocidad a la pelota
+            this.ball.setLinvel({
+                x: (dx / length) * speed,
+                y: (dy / length) * speed
+            }, true);
+        });
+    }
 }
