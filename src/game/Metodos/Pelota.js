@@ -1,38 +1,35 @@
+// src/game/Metodos/Pelota.js
 export function createBall(scene, x, y) {
     const RAPIER = scene.RAPIER;
     const BALL_RADIUS = 28;
 
-    // Círculo visual
+    // visual
     const circle = scene.add.circle(x, y, BALL_RADIUS, 0xffffff);
 
-    // Cuerpo dinámico físico
+    // cuerpo dinámico
     const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(x, y)
-        .setLinearDamping(0.3)       // añade leve rozamiento
-        .setAngularDamping(0.5);     // evita giros eternos
+        .setLinearDamping(0.3)
+        .setAngularDamping(0.5);
 
     const body = scene.world.createRigidBody(bodyDesc);
+    body.userData = circle; // para sincronizar visuals
 
-    // Asignamos el círculo visual como userData (para sincronizar)
-    body.userData = circle;
-
-    // Collider físico (esfera)
     const colliderDesc = RAPIER.ColliderDesc.ball(BALL_RADIUS)
         .setRestitution(0.96)
-        .setFriction(0.5);           // un poco de fricción
+        .setFriction(0.5);
 
     scene.world.createCollider(colliderDesc, body);
 
-    // Impulso inicial
-    body.applyImpulse({ 
-        x: Phaser.Math.Between(-400, 400), 
-        y: Phaser.Math.Between(-200, 200) 
-    }, true);
+    // velocidad inicial fiable (usa RAPIER.Vector2)
+    const initialVel = new RAPIER.Vector2(
+        Phaser.Math.Between(-400, 400),
+        Phaser.Math.Between(-200, 200)
+    );
+    body.setLinvel(initialVel, true);
 
-    // Devolvemos el cuerpo
     return body;
 }
-
 
 export function resetBall(scene) {
     const body = scene.ball;

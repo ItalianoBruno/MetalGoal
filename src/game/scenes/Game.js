@@ -39,6 +39,8 @@ export class Game extends Scene {
         });
 
         this.ball = createBall(this, 960, 540);
+        // console.log("Pelota creada:", this.ball);
+
         this.goalLeft = createGoal(this, 60, 540);
         this.goalRight = createGoal(this, 1860, 540);
 
@@ -51,9 +53,20 @@ export class Game extends Scene {
 
         this.resetBall = () => resetBall(this);
 
-        this.input.on('pointerdown', () => {
-            this.ball.applyImpulse({ x: Phaser.Math.Between(-200, 200), y: Phaser.Math.Between(-150, 150) }, true);
-        });
+        // this.input.on('pointerdown', () => {
+        //     this.ball.applyImpulse({ x: Phaser.Math.Between(-200, 200), y: Phaser.Math.Between(-150, 150) }, true);
+        //     this.input.on('pointerdown', () => {
+        //     console.log("Click detectado");
+        //     console.log("this.ball:", this.ball);
+        //     console.log("Ball translation:", this.ball.translation?.());
+        //     console.log("Ball type:", typeof this.ball);
+        //     console.log("Has applyImpulse:", !!this.ball.applyImpulse);
+
+        // });    });
+        
+        
+
+
 
     }
 
@@ -69,6 +82,16 @@ export class Game extends Scene {
                 const t = body.translation();
                 userData.setPosition(t.x, t.y);
             }
+            this.input.on('pointerdown', () => {
+                if (!this.ball) return;
+                this.ball.wakeUp();
+                
+                const forceScale = 10000;
+
+                const impulse = new this.RAPIER.Vector2(forceScale, forceScale);
+
+                // this.ball.applyImpulse(impulse, true);
+            });
         });
 
 
