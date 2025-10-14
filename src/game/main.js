@@ -23,7 +23,7 @@ const config = {
         Preloader,
         MainMenu,
         MainGame,
-        PVE,        // <--- NUEVO
+        PVE,
         GameOver
     ]
 };
