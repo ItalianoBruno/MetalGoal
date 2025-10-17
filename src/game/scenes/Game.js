@@ -16,6 +16,10 @@ export class Game extends Scene {
         this.cameras.main.setBackgroundColor(0x0f4c1f);
 
         createBoundaries(this);
+        this.add.image(960, 540, 'cancha')
+        .setOrigin(0.5)
+        .setDisplaySize(1920, 1080)
+        .setDepth(-10);
 
         const rods = [
             { count: 1, color: 0xff0000, key: 'r', offsetX: 100 },
@@ -90,7 +94,7 @@ export class Game extends Scene {
 
                 const impulse = new this.RAPIER.Vector2(forceScale, forceScale);
 
-                // this.ball.applyImpulse(impulse, true);
+                this.ball.applyImpulse(impulse, true);
             });
         });
 
