@@ -40,5 +40,72 @@ export class MainMenu extends Scene
         botButton.on('pointerdown', () => {
             this.scene.start('PVE');
         });
+        
+        // MainMenu.js (dentro de create())
+        // ... [Tu código actual de botones (vsButton, pveButton) y listeners] ...
+
+        this.buttons = [vsButton, botButton];
+        this.selectedButtonIndex = 0; // Empieza en 'VS'
+        this.buttons[this.selectedButtonIndex].setStyle({ backgroundColor: '#555' }); // Resalta el inicial
+
+        // Variables de tiempo para evitar selección múltiple
+        this.lastInputTime = 0;
+        this.inputDelay = 150;
+
+        // Conectar el gamepad al inicio (Phaser lo gestiona automáticamente)
+        this.input.gamepad.once('connected', () => {
+            console.log('Gamepad 1 conectado.');
+        });
     }
+    // MainMenu.js (Añade este nuevo método)
+    update(time) {
+    const pad = this.input.gamepad.getPad(0);
+    if (!pad) return;
+
+    // Evita cambios demasiado rápidos
+    if (time - this.lastInputTime < this.inputDelay) return;
+
+    let move = 0;
+
+    // --- D-Pad (arriba/abajo) ---
+    if (pad.buttons[12]?.pressed) move = -1; 
+    else if (pad.buttons[13]?.pressed) move = 1;
+
+    // --- Joystick izquierdo (eje Y) ---
+    const axisY = pad.axes.length > 1 ? pad.axes[1].getValue() : 0;
+    if (move === 0) {
+        if (axisY < -0.5) move = -1;
+        else if (axisY > 0.5) move = 1;
+    }
+
+    // --- Mover selección ---
+    if (move !== 0) {
+        // Quita el color del botón anterior
+        this.buttons[this.selectedButtonIndex].setStyle({ backgroundColor: '#222' });
+
+        // Cambia el índice, asegurando que sea circular
+        this.selectedButtonIndex = Phaser.Math.Wrap(
+            this.selectedButtonIndex + move,
+            0,
+            this.buttons.length
+        );
+
+        // Resalta el nuevo botón
+        this.buttons[this.selectedButtonIndex].setStyle({ backgroundColor: '#555' });
+
+        console.log(`[Menu] Selección: ${this.buttons[this.selectedButtonIndex].text}`);
+        this.lastInputTime = time;
+    }
+
+    // --- Confirmar selección (botón X o A) ---
+    if (pad.buttons[0]?.pressed) {
+        this.lastInputTime = time;
+        const selected = this.buttons[this.selectedButtonIndex].text;
+
+        console.log(`[Menu] Seleccionado: ${selected}`);
+        if (selected === 'VS') this.scene.start('Tutorial');
+        else if (selected === 'Bot') this.scene.start('PVE');
+    }
+}
+
 }
