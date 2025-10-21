@@ -27,6 +27,8 @@ export class Tutorial extends Scene
         Si la pelota queda atascada
         ¡Hace clic en el campo!
 
+        Para reiniciar el juego, apretá la barra espaciadora
+
         --- PARA COMENZAR ---
         MANTÉN presionado X en AMBOS MANDOS por 2 segundos.
         (O presiona ESPACIO en el teclado)
