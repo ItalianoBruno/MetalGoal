@@ -129,8 +129,8 @@ update(time, delta) {
                 // Aplicar un impulso aleatorio
                 const pushStrength = 3000; // Fuerza del impulso
                 const angle = Phaser.Math.Between(0, 360); // Ángulo aleatorio en grados
-                const velX = Math.cos(angle * 5) * pushStrength;
-                const velY = Math.sin(angle * 5) * pushStrength;
+                const velX = Math.cos(angle * 50) * pushStrength;
+                const velY = Math.sin(angle * 50) * pushStrength;
                 
                 this.ball.wakeUp(); // Asegurarse de que el cuerpo dinámico esté activo
                // Game.js:136 (Código Corregido)
