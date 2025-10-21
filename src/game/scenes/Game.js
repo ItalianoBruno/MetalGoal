@@ -75,7 +75,10 @@ export class Game extends Scene {
         this.scoreB = 0;
         this.scoreText = this.add.text(960, 40, '0 - 0', { fontSize: '32px', color: '#fff' }).setOrigin(0.5);
 
-        this.resetBall = () => resetBall(this);   
+        this.resetBall = () => resetBall(this);  
+        
+        this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    
         
     }
 
@@ -167,6 +170,7 @@ update(time, delta) {
 
     checkGoal(this);
 
+    if (this.spaceKey.isDown){this.scene.restart()};
     
     // ===========================================================
     // === 3. MOVIMIENTO VERTICAL (Teclado + Gamepad) ============
