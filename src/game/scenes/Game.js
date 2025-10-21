@@ -170,10 +170,7 @@ update(time, delta) {
 
     checkGoal(this);
 
-     this.input.keyboard.once('keydown-SPACE', () => {
-            this.scene.start('Tutorial');
-        });
-    }
+     this.input.keyboard.once('keydown-SPACE', () =>  this.scene.start('Tutorial'));
     // ===========================================================
     // === 3. MOVIMIENTO VERTICAL (Teclado + Gamepad) ============
     // ===========================================================
