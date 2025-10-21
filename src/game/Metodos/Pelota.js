@@ -1,13 +1,13 @@
 // src/game/Metodos/Pelota.js
 export function createBall(scene, x, y) {
     const RAPIER = scene.RAPIER;
-    const BALL_RADIUS = 28;
+    const BALL_RADIUS = 30;
 
     // visual
     const circle = scene.add.circle(x, y, BALL_RADIUS, 0xffffff);
 
     // cuerpo dinámico
-    const bodyDesc = RAPIER.RigidBodyDesc.dynamic()
+    const bodyDesc = RAPIER.RigidBodyDesc.dynamic(BALL_RADIUS)
         .setTranslation(x, y)
         .setLinearDamping(0.3)
         .setAngularDamping(0.5);
@@ -16,7 +16,7 @@ export function createBall(scene, x, y) {
     body.userData = circle; // para sincronizar visuals
 
     const colliderDesc = RAPIER.ColliderDesc.ball(BALL_RADIUS)
-        .setRestitution(0.96)
+        .setRestitution(0.9)
         .setFriction(0.5);
 
     scene.world.createCollider(colliderDesc, body);
