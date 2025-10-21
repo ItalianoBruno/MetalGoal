@@ -30,36 +30,52 @@ export function createRod(scene, x, count, color) {
 // =======================================================================
 // === moveRod: Movimiento Vertical (Y) INDEPENDIENTE de la Patada (X) ===
 // =======================================================================
+// --- Jugadores.js (función moveRod modificada) ---
+
 export function moveRod(scene, team, dy) {
-    // 'team' es una sola barra (un array de RigidBodies)
     if (!team || team.length === 0) return;
     const PLAYER_HEIGHT = 70;
-    const margin = 60;
+    const margin = 60; 
     const fieldHeight = 1080;
 
-    // Lógica para calcular el desplazamiento Y para toda la barra
     const ys = team.map(body => body.translation().y);
-    const centerIndex = Math.floor(team.length / 2);
-    const centerY = ys[centerIndex]; 
-    const halfBarHeight = ((team.length - 1) * 150) / 2;
-    const topLimit = margin + halfBarHeight;
-    const bottomLimit = fieldHeight - margin - halfBarHeight;
+    const centerY = ys.reduce((a, b) => a + b) / ys.length;
+
+    let topLimit, bottomLimit;
     
+    // Identificación de la barra del arquero (un solo jugador y posición cercana al arco)
+    const isGoalkeeperRod = team.length === 1 && 
+        (team[0].originalPos.x < 300 || team[0].originalPos.x > 1620); 
+
+    if (isGoalkeeperRod) {
+        // Límites para el Arquero: Colisión con los bordes del arco
+        // Basado en Limites.js: goalHeight = 350, thickness = 20.
+        const GOAL_WALL_THICKNESS = 20;
+        const GOAL_HEIGHT = PLAYER_HEIGHT * 5; 
+        const GOAL_OPENING_TOP_Y = fieldHeight / 2 - GOAL_HEIGHT / 2; // 365
+        const GOAL_OPENING_BOTTOM_Y = fieldHeight / 2 + GOAL_HEIGHT / 2; // 715
+        
+        // topLimit: Borde interior superior (365 + 10 = 375) + mitad de altura del jugador (35) = 410
+        topLimit = GOAL_OPENING_TOP_Y + GOAL_WALL_THICKNESS / 2 + PLAYER_HEIGHT / 2; 
+        // bottomLimit: Borde interior inferior (715 - 10 = 705) - mitad de altura del jugador (35) = 670
+        bottomLimit = GOAL_OPENING_BOTTOM_Y - GOAL_WALL_THICKNESS / 2 - PLAYER_HEIGHT / 2;
+        
+    } else {
+        // Lógica original para el resto de las barras
+        const halfBarHeight = team.length * 150 / 2;
+
+        topLimit = margin + halfBarHeight;
+        bottomLimit = fieldHeight - margin - halfBarHeight;
+    }
+
     const newCenterY = Phaser.Math.Clamp(centerY + dy, topLimit, bottomLimit);
     const deltaY = newCenterY - centerY;
 
     for (let body of team) {
         const pos = body.translation();
-        const newY = pos.y + deltaY;
-        
-        // 1. Siempre guardar la posición Y deseada en _nextY
-        body._nextY = newY;
-
-        // 2. Aplicar la traslación SÓLO si el jugador NO está en movimiento de patada
-        // Si está pateando (isKicking), kickRod se encargará de usar _nextY
-        if (!body.isKicking) {
-            body.setNextKinematicTranslation({ x: pos.x, y: newY });
-        }
+        // Se asume que `_nextY` se utiliza para la coordinación con la patada.
+        body._nextY = pos.y + deltaY;
+        body.setNextKinematicTranslation({ x: pos.x, y: body._nextY });
     }
 }
 

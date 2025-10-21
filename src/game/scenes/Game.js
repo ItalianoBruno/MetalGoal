@@ -43,7 +43,19 @@ export class Game extends Scene {
         });
 
         this.ball = createBall(this, 960, 540);
-        // console.log("Pelota creada:", this.ball);
+        
+        this.scoreA = 0;
+        this.scoreB = 0;
+        this.scoreText = this.add.text(960, 100, '0 - 0', {
+            fontFamily: 'Arial Black', fontSize: 80, color: '#ffffff',
+            stroke: '#000000', strokeThickness: 12,
+            align: 'center'
+        }).setOrigin(0.5).setDepth(10);
+        
+        this.goalScored = false;
+        
+        // NUEVO: Inicializar el contador para la pelota quieta
+        this.lastBallMoveTime = this.time.now;
 
         this.goalLeft = createGoal(this, 60, 540);
         this.goalRight = createGoal(this, 1860, 540);
@@ -75,7 +87,9 @@ export class Game extends Scene {
 
 // Game.js (Método update completo y corregido)
 
-update() {
+// --- Game.js (método update completo) ---
+
+update(time, delta) {
     if (!this.world) return;
     
     // 1. Declarar pads AHORA para que la lógica de Gamepad funcione
@@ -94,7 +108,47 @@ update() {
         }
     });
 
+    // -------------------------------------------------------------
+    // === 2.5. REACTIVACIÓN DE LA PELOTA QUIETA (1.5 segundos) ======
+    // -------------------------------------------------------------
+    if (this.ball && !this.goalScored) {
+        const ballVel = this.ball.linvel();
+        // Usamos el cuadrado de la magnitud para evitar cálculos de raíz cuadrada (más eficiente)
+        const speedSq = ballVel.x * ballVel.x + ballVel.y * ballVel.y;
+        const MIN_MOVE_SPEED_SQ = 10 * 10; // Mínima velocidad (ej: 10px/s)
+
+        if (speedSq > MIN_MOVE_SPEED_SQ) {
+            // Pelota en movimiento: actualizar el tiempo de último movimiento
+            this.lastBallMoveTime = time;
+        } else {
+            // Pelota quieta: verificar el tiempo transcurrido
+            const timeStopped = time - this.lastBallMoveTime;
+            const TIMEOUT = 1500; // 2 segundos
+            
+            if (timeStopped > TIMEOUT) {
+                // Aplicar un impulso aleatorio
+                const pushStrength = 3000; // Fuerza del impulso
+                const angle = Phaser.Math.Between(0, 360); // Ángulo aleatorio en grados
+                const velX = Math.cos(angle * Phaser.Math.DEG_TO_RAD) * pushStrength;
+                const velY = Math.sin(angle * Phaser.Math.DEG_TO_RAD) * pushStrength;
+                
+                this.ball.wakeUp(); // Asegurarse de que el cuerpo dinámico esté activo
+               // Game.js:136 (Código Corregido)
+                this.ball.applyImpulse(new this.RAPIER.Vector2(velX, velY), true);
+                
+                // Reiniciar el contador de tiempo de movimiento
+                this.lastBallMoveTime = time; 
+                console.log("Pelota quieta detectada. Aplicando impulso aleatorio.");
+            }
+        }
+    }
+    // -------------------------------------------------------------
+
+
     // --- Clic con mouse (debe ser refactorizado fuera de update, pero lo dejo) ---
+    // NOTA: Mover la creación de este evento (this.input.on) a `create()` para que no se ejecute 60 veces por segundo. 
+    // Si lo dejas aquí, está creando ~60 eventos por segundo, lo cual es ineficiente.
+    /*
     this.input.on('pointerdown', (pointer) => {
         if (!this.ball) return;
         this.ball.wakeUp();
@@ -102,16 +156,18 @@ update() {
         const dx = pointer.x - ballPos.x;
         const dy = pointer.y - ballPos.y;
         const length = Math.sqrt(dx * dx + dy * dy) || 1;
-        const forceScale = 50;
+        const forceScale = 500;
         const impulse = new this.RAPIER.Vector2(
             (dx / length) * forceScale,
             (dy / length) * forceScale
         );
         this.ball.applyImpulse(impulse, true);
     });
+    */
 
     checkGoal(this);
 
+    
     // ===========================================================
     // === 3. MOVIMIENTO VERTICAL (Teclado + Gamepad) ============
     // ===========================================================
@@ -191,6 +247,9 @@ update() {
                 kickRod(this, player, dir, isHolding);
             });
         });
+
+        // Guardar el estado actual de los botones para la próxima iteración (Detección de JustDown)
+        pad._prevButtons = pad.buttons.map(b => b?.pressed);
     });
 
     // ===========================================================
