@@ -1,4 +1,4 @@
-// Jugadores.js
+// --- Jugadores.js ---
 export function createRod(scene, x, count, color) {
     const RAPIER = scene.RAPIER;
     const group = [];
@@ -17,150 +17,118 @@ export function createRod(scene, x, count, color) {
         const collider = RAPIER.ColliderDesc.cuboid(PLAYER_WIDTH / 2, PLAYER_HEIGHT / 2);
         scene.world.createCollider(collider, body);
 
-        // inicializaciones útiles
-        body.originalPos = { x: x, y: y };
-        body.isKicking = false;
-        body.isHeldKick = false;
-        body._nextY = y;
+        // Inicializaciones útiles
+        body.originalPos = { x, y };
+        body.isKicking = false; // Indica si el jugador está fuera de su posición X base
+        body._nextY = y;        // Guarda la posición Y deseada (independiente de la patada)
 
         group.push(body);
     }
     return group;
 }
 
+// =======================================================================
+// === moveRod: Movimiento Vertical (Y) INDEPENDIENTE de la Patada (X) ===
+// =======================================================================
 export function moveRod(scene, team, dy) {
+    // 'team' es una sola barra (un array de RigidBodies)
     if (!team || team.length === 0) return;
     const PLAYER_HEIGHT = 70;
     const margin = 60;
     const fieldHeight = 1080;
 
-    // calculamos centro de la barra en Y (centro "real")
+    // Lógica para calcular el desplazamiento Y para toda la barra
     const ys = team.map(body => body.translation().y);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    const centerY = (minY + maxY) / 2;
-    const halfBarHeight = ((maxY - minY) / 2) + (PLAYER_HEIGHT / 2);
-
+    const centerIndex = Math.floor(team.length / 2);
+    const centerY = ys[centerIndex]; 
+    const halfBarHeight = ((team.length - 1) * 150) / 2;
     const topLimit = margin + halfBarHeight;
     const bottomLimit = fieldHeight - margin - halfBarHeight;
+    
     const newCenterY = Phaser.Math.Clamp(centerY + dy, topLimit, bottomLimit);
     const deltaY = newCenterY - centerY;
 
-    // aplicamos el delta a cada jugador, pero **guardamos** el nextY en body._nextY
     for (let body of team) {
         const pos = body.translation();
-        const nextY = pos.y + deltaY;
-        body._nextY = nextY; // guardamos la Y objetivo para que otros procesos la reutilicen
-        // IMPORTANTE: aquí dejamos la X igual (no la modificamos) — kick/hold ajustará X después
-        body.setNextKinematicTranslation({ x: pos.x, y: nextY });
+        const newY = pos.y + deltaY;
+        
+        // 1. Siempre guardar la posición Y deseada en _nextY
+        body._nextY = newY;
+
+        // 2. Aplicar la traslación SÓLO si el jugador NO está en movimiento de patada
+        // Si está pateando (isKicking), kickRod se encargará de usar _nextY
+        if (!body.isKicking) {
+            body.setNextKinematicTranslation({ x: pos.x, y: newY });
+        }
     }
 }
 
-/* ------------------------------------------------------------------
-   kickRod(scene, team, dir)
-   - team: array de bodies (la "barra")
-   - dir: -1 izquierda, 1 derecha
-   - realiza la patada corta (animación ida/vuelta)
-   - NO se llama cada frame (solo en JustDown)
-   ------------------------------------------------------------------ */
-export function kickRod(scene, team, dir) {
+// =======================================================================
+// === kickRod: Manejo de Patada Sostenida y Retorno (Movimiento X) ======
+// =======================================================================
+export function kickRod(scene, player, dir, isHolding) {
+    // 'player' es un único RigidBody
     const KICK_DISTANCE = 65;
-    const KICK_DURATION = 2000; // ida y vuelta más rápido
+    const ADVANCE_SPEED = 20;
+    const baseX = player.originalPos.x;
+    
+    const pos = player.translation();
+    const currentX = pos.x;
 
-    for (const player of team) {
-        // seguridad: player debe ser un RigidBody
-        if (!player || typeof player.translation !== 'function') continue;
+    // Obtener la Y deseada que calculó moveRod (o usar la Y actual si no existe _nextY)
+    // CORRECCIÓN AQUÍ: Uso 'pos.y' en lugar de la variable 'currentX'
+    const useY = (player._nextY !== undefined) ? player._nextY : pos.y; 
 
-        // Si está en hold (pos adelantada), no ejecutamos la animación corta
-        if (player.isHeldKick) continue;
-
-        if (player.isKicking) continue; // evita solapamientos
-        player.isKicking = true;
-
-        const pos = player.translation();
-        if (!player.originalPos) player.originalPos = { x: pos.x, y: pos.y };
-
-        const baseX = player.originalPos.x;
+    // =======================================================================
+    // A. LÓGICA DE AVANCE / SOSTENIMIENTO (Si se mantiene el botón)
+    // =======================================================================
+    if (isHolding && dir !== 0) {
         const forwardX = baseX + dir * KICK_DISTANCE;
+        const distToTarget = forwardX - currentX;
+        
+        player.isKicking = true; // Establecer el estado de patada
 
-        scene.tweens.addCounter({
-            from: 0,
-            to: 1,
-            duration: KICK_DURATION,
-            ease: 'Sine.easeInOut',
-            onUpdate: () => {
-                const progress = this ? this.getValue() : arguments[0].getValue();
-                // obtiene la Y preferida: si moveRod guardó _nextY, úsala, sino usa translation().y
-                const curY = (player._nextY !== undefined) ? player._nextY : player.translation().y;
-                const newX = progress < 0.5
-                    ? Phaser.Math.Linear(baseX, forwardX, progress * 2)
-                    : Phaser.Math.Linear(forwardX, baseX, (progress - 0.5) * 2);
-
-                player.setNextKinematicTranslation({ x: newX, y: curY });
-            },
-            onComplete: () => {
-                // asegurar que vuelva exactamente a baseX pero manteniendo la Y "pendiente"
-                const curY = (player._nextY !== undefined) ? player._nextY : player.translation().y;
-                player.setNextKinematicTranslation({ x: player.originalPos.x, y: curY });
-                player.isKicking = false;
-            }
-        });
-    }
-}
-
-
-export function holdKick(scene, team, dir, hold) {
-    const HOLD_DIST = 72;
-    const RETURN_DURATION = 170; // rápido pero visible
-
-    for (const player of team) {
-        if (!player || typeof player.translation !== 'function') continue;
-
-        const pos = player.translation();
-        if (!player.originalPos) player.originalPos = { x: pos.x, y: pos.y };
-
-        const baseX = player.originalPos.x;
-        const targetX = baseX + dir * HOLD_DIST;
-        const curY = (player._nextY !== undefined) ? player._nextY : pos.y;
-
-        if (hold) {
-            // cancelar tween de retorno si existiera
-            if (player._returnTween) {
-                player._returnTween.stop();
-                player._returnTween = null;
-            }
-            // Adelanta y marca estado hold (mantiene la Y que moveRod dejó en _nextY)
-            player.setNextKinematicTranslation({ x: targetX, y: curY });
-            player.isHeldKick = true;
-            // Nota: no marcamos isKicking porque no es la animación corta
+        // Mover hacia adelante
+        if (Math.abs(distToTarget) > 1) { // Si no estamos en posición final
+            const moveX = Math.sign(distToTarget) * ADVANCE_SPEED;
+            let newX = currentX + moveX;
+            
+            // Clamping para evitar que se pase del objetivo (forwardX)
+            const finalX = (Math.sign(distToTarget) > 0) 
+                ? Math.min(newX, forwardX) 
+                : Math.max(newX, forwardX);
+                
+            player.setNextKinematicTranslation({ x: finalX, y: useY });
         } else {
-            // si estaba en hold y ahora soltas: iniciar retorno suave al baseX
-            if (player.isHeldKick) {
-                // evita crear múltiples tweens
-                if (player._returnTween) continue;
+            // Ya está en posición: Sostener la posición
+            player.setNextKinematicTranslation({ x: forwardX, y: useY });
+        }
+    } 
+    // =======================================================================
+    // B. LÓGICA DE RETORNO (Si el botón se suelta)
+    // =======================================================================
+    else {
+        // Solo retornar si el jugador está fuera de su posición base
+        if (!player.isKicking) return; 
 
-                const startX = player.translation().x;
-                player._returnTween = scene.tweens.addCounter({
-                    from: 0,
-                    to: 1,
-                    duration: RETURN_DURATION,
-                    ease: 'Sine.easeOut',
-                    onUpdate: (tween) => {
-                        const p = tween.getValue();
-                        const newX = Phaser.Math.Linear(startX, baseX, p);
-                        const useY = (player._nextY !== undefined) ? player._nextY : player.translation().y;
-                        player.setNextKinematicTranslation({ x: newX, y: useY });
-                    },
-                    onComplete: () => {
-                        player.isHeldKick = false;
-                        player._returnTween = null;
-                        // asegurar que quede exactamente en baseX
-                        const finalY = (player._nextY !== undefined) ? player._nextY : player.translation().y;
-                        player.setNextKinematicTranslation({ x: baseX, y: finalY });
-                    }
-                });
-            }
-            // si no estaba en hold, no hacemos nada (evitamos patadas repetidas)
+        const distToBase = baseX - currentX;
+
+        // Mover hacia la base
+        if (Math.abs(distToBase) > 1) { // Si no estamos en posición base
+            const moveX = Math.sign(distToBase) * ADVANCE_SPEED;
+            let newX = currentX + moveX;
+
+            // Clamping para evitar que se pase del objetivo (baseX)
+            const finalX = (Math.sign(distToBase) > 0)
+                ? Math.min(newX, baseX)
+                : Math.max(newX, baseX);
+            
+            player.setNextKinematicTranslation({ x: finalX, y: useY });
+            
+        } else {
+            // Ya está en posición base: Terminar el estado de patada
+            player.setNextKinematicTranslation({ x: baseX, y: useY });
+            player.isKicking = false;
         }
     }
 }

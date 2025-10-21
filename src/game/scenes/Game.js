@@ -2,7 +2,7 @@ import RAPIER from '@dimforge/rapier2d-compat';
 import { Scene } from 'phaser';
 import { createBoundaries } from '../Metodos/Limites.js';
 import { createBall, resetBall } from '../Metodos/Pelota.js';
-import { createRod, moveRod, kickRod, holdKick } from '../Metodos/Jugadores.js';
+import { createRod, moveRod, kickRod} from '../Metodos/Jugadores.js';
 import { createGoal, checkGoal } from '../Metodos/Goles.js';
 import { debugDraw } from '../Metodos/Debug.js';
 
@@ -69,11 +69,23 @@ export class Game extends Scene {
 
     // Game.js (Fragmento del método update)
 
-    update() {
+    // Game.js (Método update corregido)
+
+// Game.js (Método update completo)
+
+// Game.js (Método update completo y corregido)
+
+update() {
     if (!this.world) return;
+    
+    // 1. Declarar pads AHORA para que la lógica de Gamepad funcione
+    const pads = this.input.gamepad.gamepads.filter(p => p && p.connected);
+
+    // 2. Ejecución de la simulación de física
     this.world.step();
 
-    // Sincronización
+    // --- Sincronización ---
+    // NOTA: Esta iteración es correcta, ya que forEachRigidBody recorre todos los cuerpos creados.
     this.world.forEachRigidBody((body) => {
         const userData = body.userData;
         if (userData && userData.setPosition) {
@@ -82,39 +94,38 @@ export class Game extends Scene {
         }
     });
 
+    // --- Clic con mouse (debe ser refactorizado fuera de update, pero lo dejo) ---
     this.input.on('pointerdown', (pointer) => {
-            if (!this.ball) return;
-
-            this.ball.wakeUp();
-
-            const ballPos = this.ball.translation();
-            const dx = pointer.x - ballPos.x;
-            const dy = pointer.y - ballPos.y;
-            const length = Math.sqrt(dx * dx + dy * dy) || 1; // evitar /0
-
-            const forceScale = 50; // ajustá la fuerza a gusto
-
-            const impulse = new this.RAPIER.Vector2(
-                (dx / length) * forceScale,
-                (dy / length) * forceScale
-            );
-
-            this.ball.applyImpulse(impulse, true);
-        });
+        if (!this.ball) return;
+        this.ball.wakeUp();
+        const ballPos = this.ball.translation();
+        const dx = pointer.x - ballPos.x;
+        const dy = pointer.y - ballPos.y;
+        const length = Math.sqrt(dx * dx + dy * dy) || 1;
+        const forceScale = 50;
+        const impulse = new this.RAPIER.Vector2(
+            (dx / length) * forceScale,
+            (dy / length) * forceScale
+        );
+        this.ball.applyImpulse(impulse, true);
+    });
 
     checkGoal(this);
 
-    // ===== INPUT VERTICAL =====
+    // ===========================================================
+    // === 3. MOVIMIENTO VERTICAL (Teclado + Gamepad) ============
+    // ===========================================================
     let dyA = 0, dyB = 0;
     const MAX_SPEED = 20;
 
+    // Teclado
     if (this.WASD.W.isDown) dyA = -MAX_SPEED;
     else if (this.WASD.S.isDown) dyA = MAX_SPEED;
+
     if (this.cursors.up.isDown) dyB = -MAX_SPEED;
     else if (this.cursors.down.isDown) dyB = MAX_SPEED;
 
-    // Gamepads
-    const pads = this.input.gamepad.gamepads.filter(p => p && p.connected);
+    // Gamepad (se usa la variable pads definida al inicio)
     pads.forEach((pad, i) => {
         const axisY = pad.axes.length > 1 ? pad.axes[1].getValue() : 0;
         const dpadUp = pad.buttons[12]?.pressed;
@@ -131,66 +142,60 @@ export class Game extends Scene {
         }
     });
 
-    // ===== MOVIMIENTO =====
-    const redPlayers = this.teams.r.flat();
-    const bluePlayers = this.teams.a.flat();
-    this.teams.r.forEach(rod => moveRod(this, rod, dyA));
-    this.teams.a.forEach(rod => moveRod(this, rod, dyB));
+    // APLICAR MOVIMIENTO: Iterar sobre CADA BARRA (rodGroup)
+    this.teams.r.forEach(rodGroup => moveRod(this, rodGroup, dyA)); 
+    this.teams.a.forEach(rodGroup => moveRod(this, rodGroup, dyB));
 
-    // ===== PATADAS (Teclado) =====
-    const redHoldLeft = this.WASD.A.isDown;
-    const redHoldRight = this.WASD.D.isDown;
-    const blueHoldLeft = this.cursors.left.isDown;
-    const blueHoldRight = this.cursors.right.isDown;
+    // ===========================================================
+    // === 4. PATADAS (KickRod Unificado) ========================
+    // ===========================================================
 
-    redPlayers.forEach(player => {
-        if (redHoldLeft) holdKick(this, [player], -1, true);
-        else if (redHoldRight) holdKick(this, [player], 1, true);
-        else holdKick(this, [player], 0, false);
+    // --- A. TECLADO ---
+    // Iterar sobre CADA BARRA, y luego sobre CADA JUGADOR (player)
+    this.teams.r.forEach(rodGroup => {
+        rodGroup.forEach(player => {
+            const kickOut = this.WASD.A.isDown;
+            const kickIn = this.WASD.D.isDown;
+            const dir = kickIn ? 1 : (kickOut ? -1 : 0);
+            const isHolding = kickOut || kickIn;
+
+            kickRod(this, player, dir, isHolding);
+        });
+    });
+    this.teams.a.forEach(rodGroup => {
+        rodGroup.forEach(player => {
+            const kickOut = this.cursors.left.isDown;
+            const kickIn = this.cursors.right.isDown;
+            const dir = kickIn ? 1 : (kickOut ? -1 : 0);
+            const isHolding = kickOut || kickIn;
+
+            kickRod(this, player, dir, isHolding);
+        });
     });
 
-    bluePlayers.forEach(player => {
-        if (blueHoldLeft) holdKick(this, [player], -1, true);
-        else if (blueHoldRight) holdKick(this, [player], 1, true);
-        else holdKick(this, [player], 0, false);
-    });
-
-    if (Phaser.Input.Keyboard.JustDown(this.WASD.A))
-        redPlayers.forEach(player => kickRod(this, [player], -1));
-    if (Phaser.Input.Keyboard.JustDown(this.WASD.D))
-        redPlayers.forEach(player => kickRod(this, [player], 1));
-    if (Phaser.Input.Keyboard.JustDown(this.cursors.left))
-        bluePlayers.forEach(player => kickRod(this, [player], -1));
-    if (Phaser.Input.Keyboard.JustDown(this.cursors.right))
-        bluePlayers.forEach(player => kickRod(this, [player], 1));
-
-    // ===== PATADAS (MANDO) =====
+    // --- B. GAMEPAD ---
     pads.forEach((pad, i) => {
-        const team = i === 0 ? redPlayers : bluePlayers;
+        if (!pad) return;
 
         const leftHeld = !!pad.buttons[6]?.pressed;
         const rightHeld = !!pad.buttons[7]?.pressed;
 
-        team.forEach(player => {
-            if (leftHeld) holdKick(this, [player], -1, true);
-            else if (rightHeld) holdKick(this, [player], 1, true);
-            else holdKick(this, [player], 0, false);
+        const teamRods = (i === 0) ? this.teams.r : this.teams.a;
+
+        const dir = rightHeld ? 1 : (leftHeld ? -1 : 0);
+        const isHolding = leftHeld || rightHeld;
+
+        // Iterar sobre CADA BARRA, y luego sobre CADA JUGADOR
+        teamRods.forEach(rodGroup => {
+            rodGroup.forEach(player => {
+                kickRod(this, player, dir, isHolding);
+            });
         });
-
-        if (!pad._prevButtons) pad._prevButtons = [];
-        const prev6 = !!pad._prevButtons[6];
-        const prev7 = !!pad._prevButtons[7];
-
-        if (pad.buttons[6]?.pressed && !prev6)
-            team.forEach(player => kickRod(this, [player], -1));
-        if (pad.buttons[7]?.pressed && !prev7)
-            team.forEach(player => kickRod(this, [player], 1));
-
-        pad._prevButtons[6] = leftHeld;
-        pad._prevButtons[7] = rightHeld;
     });
 
+    // ===========================================================
     debugDraw(this);
 }
+
 
 }
