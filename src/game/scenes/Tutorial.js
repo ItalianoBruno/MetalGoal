@@ -24,6 +24,8 @@ export class Tutorial extends Scene
         Patada Izq: L2
         Patada Der: R2
 
+        Si la pelota queda atascada
+        ¡Hace clic en el campo!
 
         --- PARA COMENZAR ---
         MANTÉN presionado X en AMBOS MANDOS por 2 segundos.
