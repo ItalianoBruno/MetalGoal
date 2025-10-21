@@ -170,8 +170,10 @@ update(time, delta) {
 
     checkGoal(this);
 
-    if (this.spaceKey.isDown){this.scene.restart()};
-    
+     this.input.keyboard.once('keydown-SPACE', () => {
+            this.scene.start('Tutorial');
+        });
+    }
     // ===========================================================
     // === 3. MOVIMIENTO VERTICAL (Teclado + Gamepad) ============
     // ===========================================================
