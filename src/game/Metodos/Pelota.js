@@ -16,14 +16,14 @@ export function createBall(scene, x, y) {
     body.userData = circle; // para sincronizar visuals
 
     const colliderDesc = RAPIER.ColliderDesc.ball(BALL_RADIUS)
-        .setRestitution(0.9)
-        .setFriction(0.5);
+        .setRestitution(0.95)
+        .setFriction(0.55);
 
     scene.world.createCollider(colliderDesc, body);
 
     // velocidad inicial fiable (usa RAPIER.Vector2)
     const initialVel =  new RAPIER.Vector2(
-         Phaser.Math.Between(-400, 400),
+         Phaser.Math.Between(-700, 700),
          Phaser.Math.Between(-200, 200)
      );
     body.setLinvel(initialVel, true);

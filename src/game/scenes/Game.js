@@ -79,18 +79,30 @@ export class Game extends Scene {
         
         this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
     
+        // --- Texto emergente (Pop-Up de "Machacá!") ---
+        this.mashText = this.add.text(960, 200, "¡Machacá X o Espacio para darle vida a la pelota!", {
+            fontSize: "36px",
+            fontFamily: "Arial Black",
+            color: "#ffcc00",
+            stroke: "#000000",
+            strokeThickness: 6
+        })
+        .setOrigin(0.5)
+        .setDepth(100)
+        .setVisible(false);
+
+        // Pequeño movimiento animado para el texto (flotante)
+        this.tweens.add({
+            targets: this.mashText,
+            y: 180,
+            duration: 600,
+            yoyo: true,
+            repeat: -1,
+            ease: "Sine.easeInOut"
+        });
+
         
     }
-
-    // Game.js (Fragmento del método update)
-
-    // Game.js (Método update corregido)
-
-// Game.js (Método update completo)
-
-// Game.js (Método update completo y corregido)
-
-// --- Game.js (método update completo) ---
 
 update(time, delta) {
     if (!this.world) return;
@@ -111,40 +123,63 @@ update(time, delta) {
         }
     });
 
-    // -------------------------------------------------------------
-    // === 2.5. REACTIVACIÓN DE LA PELOTA QUIETA (1.5 segundos) ======
-    // -------------------------------------------------------------
-    if (this.ball && !this.goalScored) {
-        const ballVel = this.ball.linvel();
-        // Usamos el cuadrado de la magnitud para evitar cálculos de raíz cuadrada (más eficiente)
-        const speedSq = ballVel.x * ballVel.x + ballVel.y * ballVel.y;
-        const MIN_MOVE_SPEED_SQ = 10 * 10; // Mínima velocidad (ej: 10px/s)
+    // --- MACHACAR BOTONES PARA DAR IMPULSO A LA PELOTA ---
+    if (!this.ballMashCount) this.ballMashCount = 0;
+    if (!this.mashActive) this.mashActive = false;
 
-        if (speedSq > MIN_MOVE_SPEED_SQ) {
-            // Pelota en movimiento: actualizar el tiempo de último movimiento
-            this.lastBallMoveTime = time;
-        } else {
-            // Pelota quieta: verificar el tiempo transcurrido
-            const timeStopped = time - this.lastBallMoveTime;
-            const TIMEOUT = 1500; // 2 segundos
-            
-            if (timeStopped > TIMEOUT) {
-                // Aplicar un impulso aleatorio
-                const pushStrength = 3000; // Fuerza del impulso
-                const angle = Phaser.Math.Between(0, 360); // Ángulo aleatorio en grados
-                const velX = Math.cos(angle * 30000) * pushStrength;
-                const velY = Math.sin(angle * 30000) * pushStrength;
-                
-                this.ball.wakeUp(); // Asegurarse de que el cuerpo dinámico esté activo
-               // Game.js:136 (Código Corregido)
-                this.ball.applyImpulse(new this.RAPIER.Vector2(velX, velY), true);
-                
-                // Reiniciar el contador de tiempo de movimiento
-                this.lastBallMoveTime = time; 
-                console.log("Pelota quieta detectada. Aplicando impulso aleatorio.");
-            }
-        }
+    const MASH_LIMIT = 20;
+    const pushStrength = 850_900;
+
+    // --- INPUTS (TECLADO + MANDO) ---
+    // Teclado
+    const spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    if (Phaser.Input.Keyboard.JustDown(spaceKey)) {
+        this.ballMashCount++;
+        console.log(`Espacio presionado: ${this.ballMashCount}/${MASH_LIMIT}`);
     }
+
+    // Mandos
+    pads.forEach(pad => {
+        if (pad.buttons[0]?.pressed && !pad._prevXPressed) {
+            this.ballMashCount++;
+            console.log(`Botón X presionado: ${this.ballMashCount}/${MASH_LIMIT}`);
+        }
+        pad._prevXPressed = pad.buttons[0]?.pressed;
+    });
+
+    // --- COMPROBAR SI LA PELOTA ESTÁ QUIETA ---
+    const vel = this.ball.linvel();
+    const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+    const TIMEOUT = 100; // 4 segundos sin moverse
+    if (!this.lastBallMoveTime) this.lastBallMoveTime = 0;
+
+    if (speed > 0.1) {
+        // La pelota se mueve → ocultar texto y reiniciar temporizador
+        this.lastBallMoveTime = time;
+        this.mashText.setVisible(false);
+        this.mashActive = false;
+    } else if (time - this.lastBallMoveTime > TIMEOUT && !this.mashActive) {
+        // La pelota está quieta → mostrar texto
+        this.mashText.setVisible(true);
+        this.mashActive = true;
+    }
+
+    // --- APLICAR IMPULSO SI LLEGA AL LÍMITE ---
+    if (this.ballMashCount >= MASH_LIMIT) {
+        const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const velX = Math.cos(angle) * pushStrength;
+        const velY = Math.sin(angle) * pushStrength;
+
+        this.ball.wakeUp();
+        this.ball.applyImpulse(new this.RAPIER.Vector2(velX, velY), true);
+
+        this.lastBallMoveTime = time;
+        this.ballMashCount = 0;
+        this.mashText.setVisible(false);
+        this.mashActive = false;
+        console.log("⚡ Pelota reactivada con fuerza! ⚡");
+    }
+
     // -------------------------------------------------------------
 
 
@@ -170,7 +205,7 @@ update(time, delta) {
 
     checkGoal(this);
 
-     this.input.keyboard.once('keydown-SPACE', () =>  this.scene.start('Tutorial'));
+    //  this.input.keyboard.once('keydown-SPACE', () =>  this.scene.start('Tutorial'));
     // ===========================================================
     // === 3. MOVIMIENTO VERTICAL (Teclado + Gamepad) ============
     // ===========================================================
