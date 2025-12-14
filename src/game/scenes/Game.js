@@ -38,7 +38,7 @@ export class Game extends Scene {
 
         rods.forEach((rod, i) => {
             const x = (rod.offsetX !== undefined) ? rod.offsetX : margin + i * rodSpacing;
-            const group = createRod(this, x, rod.count, rod.color);
+            const group = createRod(this, x, rod.count, rod.color, rod.key);
             this.teams[rod.key].push(group);
         });
 
@@ -101,6 +101,11 @@ export class Game extends Scene {
             ease: "Sine.easeInOut"
         });
 
+        // --- ACCESO A ESCENA DE TUTORIAL ---
+        // Tecla R (teclado)
+        this.input.keyboard.on('keydown-R', () => {
+            this.scene.start('Tutorial');
+        });
         
     }
 
@@ -113,6 +118,7 @@ update(time, delta) {
     // 2. Ejecución de la simulación de física
     this.world.step();
 
+// ... el resto de tu código update()
     // --- Sincronización ---
     // NOTA: Esta iteración es correcta, ya que forEachRigidBody recorre todos los cuerpos creados.
     this.world.forEachRigidBody((body) => {
@@ -291,8 +297,8 @@ update(time, delta) {
     });
 
     // ===========================================================
-    debugDraw(this);
+    // debugDraw(this);
+   
+}
 }
 
-
-}

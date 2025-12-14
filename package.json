@@ -15,7 +15,7 @@
     },
     "homepage": "https://github.com/phaserjs/template-rapier#readme",
     "scripts": {
-         "dev": "node log.js dev & vite --config vite/config.dev.mjs",
+        "dev": "node log.js dev & vite --config vite/config.dev.mjs",
         "build": "node log.js build & vite build --config vite/config.prod.mjs",
         "dev-nolog": "vite --config vite/config.dev.mjs",
         "build-nolog": "vite build --config vite/config.prod.mjs"
@@ -26,6 +26,7 @@
     },
     "dependencies": {
         "@dimforge/rapier2d-compat": "^0.14.0",
+        "firebase": "^12.6.0",
         "phaser": "^3.90.0"
     }
 }

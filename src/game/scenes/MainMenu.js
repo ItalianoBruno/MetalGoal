@@ -1,4 +1,6 @@
 import { Scene } from 'phaser';
+import { initAuth } from '../Metodos/firebase.js';
+import { loginWithGoogle } from '../Metodos/firebase.js';
 
 export class MainMenu extends Scene
 {
@@ -7,11 +9,19 @@ export class MainMenu extends Scene
         super('MainMenu');
     }
 
-    create ()
+    async create ()
     {
         // Obtén el tamaño real del canvas
         const width = this.sys.game.config.width;
         const height = this.sys.game.config.height;
+        try {
+            await initAuth();
+            console.log("Jugador autenticado en Firebase");
+        } catch (e) {
+            console.error("Error autenticando jugador:", e);
+        }
+
+        initAuth();
 
         // Centra el fondo y el logo (ajusta si tienes imágenes grandes)
         this.add.image(width / 2, height / 2, 'background').setDisplaySize(width, height);
@@ -23,23 +33,43 @@ export class MainMenu extends Scene
             align: 'center'
         }).setOrigin(0.5);
 
+        //Botón Google
+        const googleBtn = this.add.image(60, 65, 'google',)
+        .setOrigin(0.5).setScale(0.2).setInteractive({ useHandCursor: true })
+
+        googleBtn.on('pointerdown', async () => {
+            try {
+            await loginWithGoogle();
+            console.log("Login con Google exitoso:", auth.currentUser);
+            } catch (e) {
+            console.error("Error login Google", e);
+            }
+        });
+        googleBtn.on('pointerover', () => googleBtn.setTint(0xdddddd));
++        googleBtn.on('pointerout', () => googleBtn.clearTint());
+        
         // Botón VS
         const vsButton = this.add.text(width / 2, height / 2, 'VS', {
-            fontFamily: 'Arial', fontSize: 48, color: '#00ff00', backgroundColor: '#222'
+            fontFamily: 'Arial', fontSize: 48, color: '#00ff00', backgroundColor: '#3d3d3dff'
         }).setOrigin(0.5).setPadding(32).setInteractive({ useHandCursor: true });
 
         vsButton.on('pointerdown', () => {
             this.scene.start('Game');
         });
+        
+        vsButton.on('pointerover', () =>  vsButton.setTint(0xdddddd));
++       vsButton.on('pointerout', () =>  vsButton.clearTint());
 
         // Botón Bot
-        const botButton = this.add.text(width / 2, height / 2 + 100, 'Bot', {
-            fontFamily: 'Arial', fontSize: 48, color: '#00aaff', backgroundColor: '#222'
+        const botButton = this.add.text(width / 2, height / 2 + 120, 'Bot', {
+            fontFamily: 'Arial', fontSize: 48, color: '#00aaff', backgroundColor: '#3d3d3dff'
         }).setOrigin(0.5).setPadding(32).setInteractive({ useHandCursor: true });
 
         botButton.on('pointerdown', () => {
             this.scene.start('PVE');
         });
+        botButton.on('pointerover', () => botButton.setTint(0xdddddd));
++       botsButton.on('pointerout', () => botButton.clearTint());
         
         // MainMenu.js (dentro de create())
         // ... [Tu código actual de botones (vsButton, pveButton) y listeners] ...

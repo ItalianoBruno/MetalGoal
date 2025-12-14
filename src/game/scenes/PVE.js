@@ -1,439 +1,215 @@
 import RAPIER from '@dimforge/rapier2d-compat';
 import { Scene } from 'phaser';
+import { createBoundaries } from '../Metodos/Limites.js';
+import { createBall, resetBall } from '../Metodos/Pelota.js';
+import { createRod, moveRod, kickRod } from '../Metodos/Jugadores.js';
+import { createGoal, checkGoal } from '../Metodos/Goles.js';
+import { debugDraw } from '../Metodos/Debug.js';
 
 export class PVE extends Scene {
-    constructor() {
-        super('PVE');
-    }
+    constructor() { super('PVE'); }
 
     async create() {
-        // Inicializar Rapier
+        this.RAPIER = RAPIER;
         await RAPIER.init();
         this.world = new RAPIER.World(new RAPIER.Vector2(0, 0));
-        this.cameras.main.setBackgroundColor(0x0f4c1f);
 
-        // Bordes del campo (ajusta a 1920x1080)
-        this.createBoundaries();
+        createBoundaries(this);
+        this.add.image(960, 540, 'cancha')
+            .setOrigin(0.5)
+            .setDisplaySize(1920, 1080)
+            .setDepth(-10);
 
-        // Disposición clásica de metegol
-        // [cantidad, color, nombre]
+        // --- CONFIGURACIÓN DE EQUIPOS ---
         const rods = [
-            { count: 1, color: 0xff0000, key: 'r', offsetX: 100 }, // arquero rojo dentro arco
-            { count: 2, color: 0xff0000, key: 'r', offsetX: 350 }, // defensores más cerca del arco
-            { count: 3, color: 0x0000ff, key: 'a' },    
+            { count: 1, color: 0xff0000, key: 'r', offsetX: 100 },   // arquero jugador
+            { count: 2, color: 0xff0000, key: 'r', offsetX: 350 },
+            { count: 3, color: 0x0000ff, key: 'a' },                 // IA
             { count: 5, color: 0xff0000, key: 'r' },
             { count: 5, color: 0x0000ff, key: 'a' },
             { count: 3, color: 0xff0000, key: 'r' },
-            { count: 2, color: 0x0000ff, key: 'a', offsetX: 1570 }, // laterales azules cerca del arco
-            { count: 1, color: 0x0000ff, key: 'a', offsetX: 1820 }, // arquero azul dentro arco
+            { count: 2, color: 0x0000ff, key: 'a', offsetX: 1570 },
+            { count: 1, color: 0x0000ff, key: 'a', offsetX: 1820 },  // arquero IA
         ];
 
-
-        // Calcula posiciones X equidistantes
-        const fieldWidth = 1920;
-        const margin = 120;
-        const usableWidth = fieldWidth - margin * 2;
+        const fieldWidth = 1920, margin = 120, usableWidth = fieldWidth - margin * 2;
         const rodSpacing = usableWidth / (rods.length - 1);
-
         this.teams = { r: [], a: [] };
 
         rods.forEach((rod, i) => {
             const x = (rod.offsetX !== undefined) ? rod.offsetX : margin + i * rodSpacing;
-            const group = this.createRod(x, rod.count, rod.color);
+            const group = createRod(this, x, rod.count, rod.color, rod.key);
             this.teams[rod.key].push(group);
         });
 
-        // Pelota centrada
-        this.ball = this.createBall(960, 540);
-        this.ball.setLinvel(new RAPIER.Vector2(-200, 50), true);
+        this.ball = createBall(this, 960, 540);
+        this.goalLeft = createGoal(this, 60, 540);
+        this.goalRight = createGoal(this, 1860, 540);
 
-        // Arcos
-        this.goalLeft = this.createGoal(60, 540);
-        this.goalRight = this.createGoal(1860, 540);
-
-        // Solo controles para el jugador rojo
-        this.WASD = this.input.keyboard.addKeys('W,A,S,D');
-
-        // Marcadores (centrado arriba)
         this.scoreA = 0;
         this.scoreB = 0;
-        this.scoreText = this.add.text(960, 40, '0 - 0', { fontSize: '32px', color: '#fff' }).setOrigin(0.5);
+        this.scoreText = this.add.text(960, 100, '0 - 0', {
+            fontFamily: 'Arial Black', fontSize: 80, color: '#ffffff',
+            stroke: '#000000', strokeThickness: 12, align: 'center'
+        }).setOrigin(0.5).setDepth(10);
 
-        this.test();
+        this.goalScored = false;
+        this.lastBallMoveTime = this.time.now;
+
+        // --- INPUTS ---
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.WASD = this.input.keyboard.addKeys('W,A,S,D');
+        this.input.gamepad.once('connected', pad => this.pad = pad);
+        this.spaceKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+        // --- TEXTO "MACHACÁ" ---
+        this.mashText = this.add.text(960, 200, "¡Machacá X o Espacio para darle vida a la pelota!", {
+            fontSize: "36px", fontFamily: "Arial Black", color: "#ffcc00",
+            stroke: "#000000", strokeThickness: 6
+        }).setOrigin(0.5).setDepth(100).setVisible(false);
+
+        this.tweens.add({
+            targets: this.mashText,
+            y: 180,
+            duration: 600,
+            yoyo: true,
+            repeat: -1,
+            ease: "Sine.easeInOut"
+        });
+
+        // --- Volver al tutorial ---
+        this.input.keyboard.on('keydown-R', () => this.scene.start('Tutorial'));
+        this.input.gamepad.on('down', (pad, index) => {
+            if (index === 9) this.scene.start('Tutorial');
+        });
     }
 
-    createBoundaries() {
-        const thickness = 20;
-        const width = 1920;
-        const height = 1080;
-        const PLAYER_HEIGHT = 70;
-        const goalHeight = PLAYER_HEIGHT * 5; // 350
-        const goalWidth = 100; // profundidad del arco (antes 120)
-        const goalY = 540; // <-- AGREGA ESTA LÍNEA
-        const goalInnerXLeft = 25; // posición interior del arco izquierdo
-        const goalInnerXRight = width - 25; // posición interior del arco derecho
-
-
-        // --- BORDES PRINCIPALES ---
-        const walls = [
-            // Arriba y abajo
-            { x: width / 2, y: thickness / 2, w: width, h: thickness }, // arriba
-            { x: width / 2, y: height - thickness / 2, w: width, h: thickness }, // abajo
-
-            // Izquierda fuera del arco (desde top hasta antes del arco)
-            { x: thickness / 2, y: (goalY - goalHeight / 2) / 2, w: thickness, h: goalY - goalHeight / 2 },
-            // Izquierda fuera del arco (desde después del arco hasta abajo)
-            { x: thickness / 2, y: (height + goalY + goalHeight / 2) / 2, w: thickness, h: height - (goalY + goalHeight / 2) },
-
-            // Derecha fuera del arco
-            { x: width - thickness / 2, y: (goalY - goalHeight / 2) / 2, w: thickness, h: goalY - goalHeight / 2 },
-            { x: width - thickness / 2, y: (height + goalY + goalHeight / 2) / 2, w: thickness, h: height - (goalY + goalHeight / 2) },
-        ];
-
-        // --- PAREDES INTERNAS DE LOS ARCOS ---
-        const goalWalls = [
-            // IZQUIERDA
-            { x: goalInnerXLeft + goalWidth / 2, y: goalY - goalHeight / 2, w: goalWidth, h: thickness }, // techo arco izq
-            { x: goalInnerXLeft + goalWidth / 2, y: goalY + goalHeight / 2, w: goalWidth, h: thickness }, // piso arco izq
-            { x: goalInnerXLeft, y: goalY, w: thickness, h: goalHeight + thickness * 2 }, // fondo arco izq
-
-            // DERECHA
-            { x: goalInnerXRight - goalWidth / 2, y: goalY - goalHeight / 2, w: goalWidth, h: thickness }, // techo arco der
-            { x: goalInnerXRight - goalWidth / 2, y: goalY + goalHeight / 2, w: goalWidth, h: thickness }, // piso arco der
-            { x: goalInnerXRight, y: goalY, w: thickness, h: goalHeight + thickness * 2 }, // fondo arco der
-        ];
-
-
-        const allWalls = [...walls, ...goalWalls];
-
-        for (let wall of allWalls) {
-            if (wall.h <= 0) continue;
-            const desc = RAPIER.RigidBodyDesc.fixed().setTranslation(wall.x, wall.y);
-            const body = this.world.createRigidBody(desc);
-            const collider = RAPIER.ColliderDesc.cuboid(wall.w / 2, wall.h / 2);
-            collider.setRestitution(0.5);
-            collider.setFriction(0.3);
-            this.world.createCollider(collider, body);
-        }
-    }
-
-
-
-    createBall(x, y) {
-        const BALL_RADIUS = 28;
-        const circle = this.add.circle(x, y, BALL_RADIUS, 0xffffff);
-        const bodyDesc = RAPIER.RigidBodyDesc.dynamic().setTranslation(x, y);
-        bodyDesc.setUserData(circle);
-        const body = this.world.createRigidBody(bodyDesc);
-        const collider = RAPIER.ColliderDesc.ball(BALL_RADIUS);
-        collider.setRestitution(0.96);
-
-        this.world.createCollider(collider, body);
-        return body;
-    }
-
-    createRod(x, count, color) {
-        const group = [];
-        const PLAYER_WIDTH = 40;
-        const PLAYER_HEIGHT = 70;
-        const fieldHeight = 1080;
-        const totalHeight = (count - 1) * 150; // separación entre jugadores
-        const startY = (fieldHeight / 2) - (totalHeight / 2);
-
-        for (let i = 0; i < count; i++) {
-            const y = startY + i * 150;
-            const rect = this.add.rectangle(x, y, PLAYER_WIDTH, PLAYER_HEIGHT, color);
-            const bodyDesc = RAPIER.RigidBodyDesc.kinematicPositionBased().setTranslation(x, y);
-            bodyDesc.setUserData(rect);
-            const body = this.world.createRigidBody(bodyDesc);
-            const collider = RAPIER.ColliderDesc.cuboid(
-                PLAYER_WIDTH / 2, PLAYER_HEIGHT / 2
-            );
-            
-            this.world.createCollider(collider, body);
-            group.push(body);
-        }
-        return group;
-    }
-
-    createGoal(x, y) {
-        const PLAYER_HEIGHT = 70;
-        const goalHeight = PLAYER_HEIGHT * 5; // 350
-        const goalWidth = 120; // debe coincidir con createBoundaries
-        const color = x < 960 ? 0x00aaff : 0xff5555;
-
-        // --- VISUAL: arco extendido ---
-        const goalRect = this.add.rectangle(x, y, goalWidth * 1.5, goalHeight)
-            .setStrokeStyle(6, color, 1)
-            .setFillStyle(color, 0.1)
-            .setDepth(-1); // atrás del resto
-
-        // --- COLLIDER de detección de gol (sin colisión física) ---
-        const triggerX = x < 960 ? 35 : 1920 - 35;
-        const desc = RAPIER.RigidBodyDesc.fixed().setTranslation(triggerX, y);
-        const body = this.world.createRigidBody(desc);
-
-        const collider = RAPIER.ColliderDesc.cuboid(10, goalHeight / 2);
-        collider.setSensor(true); // 💥 no colisiona, solo detecta
-        collider.setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
-        this.world.createCollider(collider, body);
-
-        body.userData = goalRect;
-        return body;
-    }
-
-
-
-
-    update() {
+    update(time, delta) {
         if (!this.world) return;
+        const pads = this.input.gamepad.gamepads.filter(p => p && p.connected);
         this.world.step();
 
-        // Detección de gol SOLO dentro del área del arco
-        this.checkGoal();
-
-        // Actualizar posición de objetos
-        this.world.bodies.forEach((body) => {
-            const gameObject = body.userData;
-            if (gameObject) {
-                const pos = body.translation();
-                gameObject.x = pos.x;
-                gameObject.y = pos.y;
+        // --- Sincronización visual ---
+        this.world.forEachRigidBody((body) => {
+            const userData = body.userData;
+            if (userData && userData.setPosition) {
+                const t = body.translation();
+                userData.setPosition(t.x, t.y);
             }
         });
 
-        // --- CONTROLES DEL JUGADOR (ROJO) ---
+        // =============================
+        // === MACHACAR LA PELOTA ===
+        // =============================
+        if (!this.ballMashCount) this.ballMashCount = 0;
+        if (!this.mashActive) this.mashActive = false;
+
+        const MASH_LIMIT = 20;
+        const pushStrength = 850_900;
+
+        // Teclado
+        if (Phaser.Input.Keyboard.JustDown(this.spaceKey)) {
+            this.ballMashCount++;
+        }
+
+        // Gamepad
+        pads.forEach(pad => {
+            if (pad.buttons[0]?.pressed && !pad._prevXPressed) {
+                this.ballMashCount++;
+            }
+            pad._prevXPressed = pad.buttons[0]?.pressed;
+        });
+
+        const vel = this.ball.linvel();
+        const speed = Math.sqrt(vel.x * vel.x + vel.y * vel.y);
+        const TIMEOUT = 100;
+        if (!this.lastBallMoveTime) this.lastBallMoveTime = 0;
+
+        if (speed > 0.1) {
+            this.lastBallMoveTime = time;
+            this.mashText.setVisible(false);
+            this.mashActive = false;
+        } else if (time - this.lastBallMoveTime > TIMEOUT && !this.mashActive) {
+            this.mashText.setVisible(true);
+            this.mashActive = true;
+        }
+
+        if (this.ballMashCount >= MASH_LIMIT) {
+            const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            const velX = Math.cos(angle) * pushStrength;
+            const velY = Math.sin(angle) * pushStrength;
+            this.ball.wakeUp();
+            this.ball.applyImpulse(new this.RAPIER.Vector2(velX, velY), true);
+            this.lastBallMoveTime = time;
+            this.ballMashCount = 0;
+            this.mashText.setVisible(false);
+            this.mashActive = false;
+        }
+
+        // =============================
+        // === MOVIMIENTO Y PATADAS ===
+        // =============================
         let dyA = 0;
-        if (this.WASD.W.isDown) dyA = -23;
-        else if (this.WASD.S.isDown) dyA = 23;
+        const MAX_SPEED = 20;
 
-        for (const rod of this.teams.r) {
-            this.moveRod(rod, dyA);
-        }
+        // Jugador (rojo)
+        if (this.WASD.W.isDown) dyA = -MAX_SPEED;
+        else if (this.WASD.S.isDown) dyA = MAX_SPEED;
 
-        if (Phaser.Input.Keyboard.JustDown(this.WASD.A)) {
-            for (const rod of this.teams.r) this.kickRod(rod, -1);
-        }
-        if (Phaser.Input.Keyboard.JustDown(this.WASD.D)) {
-            for (const rod of this.teams.r) this.kickRod(rod, 1);
-        }
+        this.teams.r.forEach(rodGroup => moveRod(this, rodGroup, dyA));
 
-        // --- IA PARA EL EQUIPO AZUL ---
-        this.aiMoveAndKick();
+        // --- PATADAS jugador ---
+        this.teams.r.forEach(rodGroup => {
+            rodGroup.forEach(player => {
+                const kickOut = this.WASD.A.isDown;
+                const kickIn = this.WASD.D.isDown;
+                const dir = kickIn ? 1 : (kickOut ? -1 : 0);
+                const isHolding = kickOut || kickIn;
+                kickRod(this, player, dir, isHolding);
+            });
+        });
+
+        // =============================
+        // === IA DEL EQUIPO AZUL ===
+        // =============================
+        this.aiControl(time);
+
+        checkGoal(this);
+        // debugDraw(this); // opcional
     }
 
-    aiMoveAndKick() {
-        // IA simple: mueve la barra azul más cercana a la pelota para alinearse y patea si está cerca
+    aiControl(time) {
         const ballPos = this.ball.translation();
-        let minDist = Infinity;
-        let closestRod = null;
 
-        for (const rod of this.teams.a) {
-            // Calcula la distancia horizontal de la barra al balón (usa el jugador central)
-            const centerIndex = Math.floor(rod.length / 2);
-            const player = rod[centerIndex];
+        // Mover la barra azul más cercana al balón
+        let closestRod = null;
+        let minDist = Infinity;
+        for (const rodGroup of this.teams.a) {
+            const centerIndex = Math.floor(rodGroup.length / 2);
+            const player = rodGroup[centerIndex];
             const pos = player.translation();
             const dist = Math.abs(pos.x - ballPos.x);
             if (dist < minDist) {
                 minDist = dist;
-                closestRod = rod;
+                closestRod = rodGroup;
             }
         }
 
         if (closestRod) {
-            // Mueve la barra para seguir la pelota en Y
+            // Seguir pelota en Y
             const centerIndex = Math.floor(closestRod.length / 2);
             const player = closestRod[centerIndex];
             const pos = player.translation();
             const dy = ballPos.y - pos.y;
-            const speed = Phaser.Math.Clamp(dy, -18, 18); // velocidad IA
-            this.moveRod(closestRod, speed);
+            const speed = Phaser.Math.Clamp(dy, -18, 18);
+            moveRod(this, closestRod, speed);
 
-            // Patea automáticamente si la pelota está cerca
+            // Patear automáticamente si está cerca
             const dx = Math.abs(pos.x - ballPos.x);
             const dyBall = Math.abs(pos.y - ballPos.y);
-            if (dx < 60 && dyBall < 80) {
-                this.kickRod(closestRod, 1); // patea hacia la izquierda
+            if (dx < 90 && dyBall < 100) {
+                closestRod.forEach(p => kickRod(this, p, -1, true)); // patea hacia la izquierda
             }
         }
-    }
-
-    checkGoal() {
-        const ballPos = this.ball.translation();
-        const goalHeight = 200; // Debe coincidir con el alto visual del arco
-
-        // --- Gol IZQUIERDO (azul anota) ---
-        if (
-            ballPos.x < 100 &&
-            ballPos.y > this.goalLeft.translation().y - goalHeight  &&
-            ballPos.y < this.goalLeft.translation().y + goalHeight 
-        ) {
-            this.handleGoal('a');
-        }
-
-        // --- Gol DERECHO (rojo anota) ---
-        else if (
-            ballPos.x > 1820 &&
-            ballPos.y > this.goalRight.translation().y - goalHeight &&
-            ballPos.y < this.goalRight.translation().y + goalHeight 
-        ) {
-            this.handleGoal('r');
-        }
-    }
-
-    // Mueve la "barra" tomando como referencia al jugador central
-    moveRod(team, dy) {
-        if (!team || team.length === 0) return;
-
-        const PLAYER_HEIGHT = 70;
-        const margin = 60;
-        const fieldHeight = 1080;
-
-        // Obtén las posiciones Y actuales de todos los jugadores de la barra
-        const ys = team.map(body => body.translation().y);
-        const minY = Math.min(...ys);
-        const maxY = Math.max(...ys);
-
-        // Calcula el centro real de la barra
-        const centerY = (minY + maxY) / 2;
-
-        // Calcula el alto real de la barra (de centro a centro) + medio jugador arriba y abajo
-        const halfBarHeight = ((maxY - minY) / 2) + (PLAYER_HEIGHT / 2);
-
-        // Límites corregidos
-        const topLimit = margin + halfBarHeight;
-        const bottomLimit = fieldHeight - margin - halfBarHeight;
-
-        // Nuevo centro Y limitado
-        const newCenterY = Phaser.Math.Clamp(centerY + dy, topLimit, bottomLimit);
-        const deltaY = newCenterY - centerY;
-
-        // Mueve todos los jugadores de la barra
-        for (let i = 0; i < team.length; i++) {
-            const body = team[i];
-            const pos = body.translation();
-            body.setNextKinematicTranslation({ x: pos.x, y: pos.y + deltaY });
-        }
-    }
-
-    // Patada: aplica un impulso a la pelota si está cerca del centro de la barra
-    kickRod(team, dir) {
-    const KICK_DISTANCE = 65;   // cuánto avanza la patada
-    const KICK_DURATION = 270;   // duración total en ms
-
-    for (const player of team) {
-        if (player.isKicking) continue;
-        player.isKicking = true;
-
-        // Obtenemos la posición actual
-        const pos = player.translation();
-
-        // Guardamos solo la X original (horizontal)
-        if (!player.originalPos) {
-            player.originalPos = { x: pos.x };
-        }
-
-        const x = player.originalPos.x;
-        const y = pos.y; // la Y actual (se actualiza cada patada)
-        const forwardX = x + dir * KICK_DISTANCE;
-
-        this.tweens.addCounter({
-            from: 0,
-            to: 1,
-            duration: KICK_DURATION,
-            ease: 'Sine.easeInOut',
-            onUpdate: (tween) => {
-                const progress = tween.getValue();
-                const newX =
-                    progress < 0.5
-                        ? Phaser.Math.Linear(x, forwardX, progress * 2)
-                        : Phaser.Math.Linear(forwardX, x, (progress - 0.5) * 2);
-
-                player.setNextKinematicTranslation({ x: newX, y });
-                //const obj = player.userData;
-                //if (obj) obj.rotation = Math.sin(progress * Math.PI) * 0.25;
-            },
-            onComplete: () => {
-                // Vuelve exactamente a su eje X y su Y actual
-                player.setNextKinematicTranslation({ x, y });
-                const obj = player.userData;
-                if (obj) obj.rotation = 0;
-                player.isKicking = false;
-            }
-        });
-    }
-}
-    handleGoal(team) {
-        if (this.goalScored) return;
-        this.goalScored = true;
-
-        if (team === 'r') this.scoreA++;
-        else this.scoreB++;
-
-        this.scoreText.setText(`${this.scoreA} - ${this.scoreB}`);
-
-        // 💥 Flash visual
-        const flash = this.add.rectangle(960, 540, 1920, 1080, 0xffffff)
-            .setAlpha(0);
-        this.tweens.add({
-            targets: flash,
-            alpha: { from: 0, to: 0.8 },
-            duration: 150,
-            yoyo: true,
-            onComplete: () => flash.destroy()
-        });
-
-        // 🟡 Texto "GOL!"
-        const text = this.add.text(960, 540, '¡GOL!', {
-            fontSize: '120px',
-            color: '#fff',
-            fontStyle: 'bold'
-        }).setOrigin(0.5).setScale(0);
-
-        this.tweens.add({
-            targets: text,
-            scale: { from: 0, to: 1.2 },
-            alpha: { from: 0, to: 1 },
-            duration: 300,
-            ease: 'Back.Out',
-            yoyo: true,
-            hold: 300,
-            onComplete: () => text.destroy()
-        });
-
-        // ⚙️ Reinicia la pelota después de delay
-        this.time.delayedCall(1500, () => {
-            this.resetBall();
-            this.goalScored = false;
-        });
-    }
-
-
-    resetBall() {
-        const body = this.ball;
-        body.setTranslation({ x: 960, y: 540 }, true);
-        body.setLinvel({ x: 0, y: 0 }, true);
-        body.setAngvel(0, true);
-    }
-
-
-    test() {
-        this.input.on('pointerdown', (pointer) => {
-            if (!this.ball) return;
-            const ballPos = this.ball.translation();
-            const target = { x: pointer.worldX, y: pointer.worldY };
-
-            // Calcula el vector dirección normalizado
-            const dx = target.x - ballPos.x;
-            const dy = target.y - ballPos.y;
-            const length = Math.sqrt(dx * dx + dy * dy) || 1;
-            const speed = 703; // Ajusta la velocidad deseada (3333 es el máz, dsp atraviesa elementos rígidos)
-
-            // Aplica la velocidad a la pelota
-            this.ball.setLinvel({
-                x: (dx / length) * speed,
-                y: (dy / length) * speed
-            }, true);
-        });
     }
 }

@@ -26,17 +26,25 @@ export class Preloader extends Scene {
         this.load.setPath('assets');
 
         // ==== IMÁGENES ====
+        this.load.image('google', 'GoglBtn.png');
         this.load.image('logo', 'logo.png');
         this.load.image('menuCarteles', 'menu carteles.png');
-        this.load.image('menu2', 'menu2.png');
         this.load.image('bg', 'bg.png');
         this.load.image('cancha', 'cancha1.jpg');
         this.load.image('Cancha', 'Cancha.png');
         this.load.image('Barra', 'Barra.png');
         this.load.image('PJ1', 'PJ1.png');
+        this.load.image('PJ1p2', 'PJ1.ATRAS.png');
+        this.load.image('PJ1p1', 'PJ1.PATADA.png');
         this.load.image('PJ1a', 'PJ1a.png');
+        this.load.image('PJ1ap2', 'PJ1a.ATRAS.png');
+        this.load.image('PJ1ap1', 'PJ1a.PATADA.png');
         this.load.image('PJ2', 'PJ2.png');
+        this.load.image('PJ2p1', 'PJ2.ATRAS.png');
+        this.load.image('PJ2p2', 'PJ2.PATADA.png');
         this.load.image('PJ2a', 'PJ2a.png');
+        this.load.image('PJ2ap1', 'PJ2a.ATRAS.png');
+        this.load.image('PJ2ap2', 'PJ2a.PATADA.png');
     }
 
     create() {
