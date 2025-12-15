@@ -1,4 +1,8 @@
 export function detectLanguage() {
-  const navLang = navigator.language || navigator.userLanguage;
-  return navLang.startsWith('es') ? 'es' : 'en';
+  const lang = navigator.language || navigator.userLanguage;
+
+  if (lang.startsWith("es")) return "es";
+  if (lang.startsWith("en")) return "en";
+
+  return "es"; // fallback
 }
